@@ -1,0 +1,30 @@
+# Do not upload active workspaces
+workspace/
+
+# Secrets and environment files
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.kdbx
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs/temp
+logs/
+*.log
+tmp/
+temp/
+
+# Node/Python common folders
+node_modules/
+__pycache__/
+.venv/
+venv/
