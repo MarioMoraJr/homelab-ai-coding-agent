@@ -6,7 +6,9 @@ services:
     ports:
       - "8081:8080"
     environment:
-      PASSWORD: "Orbitease210"
+      PASSWORD: ${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
     volumes:
       - ./workspace:/home/coder/workspace
       - ./config/agent-rules.md:/home/coder/agent-rules.md:ro

@@ -14,7 +14,7 @@ Build a private Codex-style coding environment that can run on my own laptop/ser
 - Tailscale
 - Local workspaces
 - AI coding agent tools
-- Optional local LLM support with Ollama
+- Local LLM support with Ollama
 
 ## Safety Model
 
@@ -68,3 +68,19 @@ https://<tailscale-machine-name-or-address>
 ```
 
 Use the password from the local `.env` file. Do not commit `.env` or share the password publicly.
+
+## Ollama
+
+Ollama is expected to run on the Windows host. Containers can reach it through Docker Desktop at:
+
+```text
+http://host.docker.internal:11434
+```
+
+The starter model is configured in `.env`:
+
+```text
+OLLAMA_MODEL=llama3.1:8b
+```
+
+The code-server container receives both `OLLAMA_HOST` and `OLLAMA_MODEL` as environment variables so agent tools can use the local model service.
