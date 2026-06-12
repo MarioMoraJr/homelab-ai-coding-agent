@@ -92,6 +92,12 @@ For headless/API-key mode, set this in the host `.env` file and recreate code-se
 GEMINI_API_KEY=<your-ai-studio-key>
 ```
 
+Optionally pin the Gemini CLI model used by the mobile UI:
+
+```text
+GEMINI_MODEL=<model-name>
+```
+
 Then:
 
 ```cmd

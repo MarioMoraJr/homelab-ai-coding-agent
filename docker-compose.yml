@@ -99,9 +99,11 @@ services:
     environment:
       MOBILE_AGENT_PASSWORD: ${MOBILE_AGENT_PASSWORD:-${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-}
       GOOGLE_GENAI_USE_GCA: ${GOOGLE_GENAI_USE_GCA:-}
+      TERM: xterm-256color
     volumes:
       - ./workspace:/workspace
       - gemini-cli-data:/home/node/.gemini

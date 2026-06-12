@@ -68,10 +68,14 @@ function commandFor(action, body) {
     case 'agent': {
       const prompt = String(body.prompt || '').trim();
       if (!prompt) throw new Error('Prompt is required');
+      const args = ['--prompt', prompt, '--approval-mode', 'yolo', '--skip-trust'];
+      if (process.env.GEMINI_MODEL) {
+        args.unshift('--model', process.env.GEMINI_MODEL);
+      }
       return {
         label: 'Gemini Agent',
         command: 'gemini',
-        args: ['--prompt', prompt, '--approval-mode', 'yolo', '--skip-trust'],
+        args,
         timeoutMs: 15 * 60 * 1000
       };
     }
