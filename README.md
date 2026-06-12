@@ -93,3 +93,14 @@ OLLAMA_MODEL=qwen2.5-coder:7b
 The code-server container receives both `OLLAMA_HOST` and `OLLAMA_MODEL` as environment variables so agent tools can use the local model service.
 
 Open WebUI runs on port `8082` and connects to the same host Ollama service. Use it to chat with installed models and switch between available Ollama models from the browser.
+
+## Coding Agent Tools
+
+The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, and venv support.
+
+Rebuild after changing the Dockerfile:
+
+```cmd
+docker compose build code-server
+docker compose up -d
+```

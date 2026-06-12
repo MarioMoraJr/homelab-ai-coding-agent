@@ -1,6 +1,9 @@
 services:
   code-server:
-    image: codercom/code-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.code-server
+    image: homelab-code-server:latest
     container_name: homelab_code_server
     restart: unless-stopped
     ports:
