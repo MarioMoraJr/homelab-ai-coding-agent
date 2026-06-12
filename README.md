@@ -28,6 +28,11 @@ Build a private Codex-style coding environment that can run on my own laptop/ser
 
 Docker is working on Windows. The first safe workspace container is configured with Docker Compose.
 
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Operations](docs/operations.md)
+
 ## First Container
 
 The starter stack runs code-server in Docker and mounts only the local workspace folder:
