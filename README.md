@@ -101,7 +101,7 @@ Open WebUI runs on port `8082` and connects to the same host Ollama service. Use
 
 ## Coding Agent Tools
 
-The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, venv support, Codex CLI, Bubblewrap sandbox support, and `socat` for local service forwarding.
+The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, venv support, Codex CLI, Bubblewrap sandbox support, `ripgrep`, `jq`, `tree`, build tools, and `socat` for local service forwarding.
 
 Inside code-server, Codex CLI can use the host Ollama service through a localhost forward:
 
@@ -114,6 +114,12 @@ Use the helper command for local agent runs:
 ```bash
 cd /home/coder/workspace/<project-folder>
 agent-local "Inspect this project and suggest one small improvement."
+```
+
+Use a different local model:
+
+```bash
+agent-local --model llama3.1:8b "Inspect this project and suggest one small improvement."
 ```
 
 Review changes before committing:

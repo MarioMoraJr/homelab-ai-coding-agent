@@ -61,6 +61,12 @@ cd /home/coder/workspace/<project-folder>
 agent-local "Inspect this project and suggest one small improvement."
 ```
 
+Alternate model:
+
+```bash
+agent-local --model llama3.1:8b "Inspect this project and suggest one small improvement."
+```
+
 The helper wraps:
 
 ```bash
