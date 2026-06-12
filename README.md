@@ -9,6 +9,7 @@ Build a private Codex-style coding environment that can run on my own laptop/ser
 ## Planned Stack
 
 - Docker
+- code-server
 - GitHub CLI
 - Tailscale
 - Local workspaces
@@ -24,4 +25,36 @@ Build a private Codex-style coding environment that can run on my own laptop/ser
 
 ## Status
 
-In progress.
+Docker is working on Windows. The first safe workspace container is configured with Docker Compose.
+
+## First Container
+
+The starter stack runs code-server in Docker and mounts only the local workspace folder:
+
+```text
+./workspace:/home/coder/workspace
+```
+
+The agent rules are mounted read-only:
+
+```text
+./config/agent-rules.md:/home/coder/agent-rules.md:ro
+```
+
+Create a local `.env` file from the example before starting:
+
+```cmd
+copy .env.example .env
+```
+
+Edit `.env` and replace `change-this-password` with a private password. Then start the container:
+
+```cmd
+docker compose up -d
+```
+
+Open code-server:
+
+```text
+http://localhost:8081
+```

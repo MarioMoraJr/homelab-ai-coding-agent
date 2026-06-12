@@ -4,12 +4,14 @@ workspace/
 # Secrets and environment files
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *.crt
 *.p12
 *.pfx
 *.kdbx
+.docker-ssh/
 
 # OS/editor files
 .DS_Store
