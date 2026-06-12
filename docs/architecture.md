@@ -23,6 +23,8 @@ This project runs a private AI coding workspace on a Windows homelab machine usi
 
 Tailscale HTTPS access is handled outside this Compose stack. Use the machine's Tailscale HTTPS address from trusted devices.
 
+Published Compose ports are bound to `127.0.0.1` on the host. Phone access should go through Tailscale Serve or a local reverse proxy rather than direct raw port exposure.
+
 ## Workspace Boundary
 
 Only this project folder is mounted into the coding container:

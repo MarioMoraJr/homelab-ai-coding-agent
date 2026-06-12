@@ -294,6 +294,8 @@ curl http://127.0.0.1:3100/status
 
 ## Ports
 
+Compose binds published web ports to `127.0.0.1` only. Use Tailscale Serve or a local reverse proxy for phone access instead of exposing raw Docker ports on every network interface.
+
 | Port | Service |
 | --- | --- |
 | `8081` | code-server |
@@ -305,6 +307,13 @@ curl http://127.0.0.1:3100/status
 | `3100` | Express demo app |
 
 Port `3000` is already used by another homelab dashboard on this machine.
+
+Optional services can be stopped when not actively testing:
+
+```cmd
+docker compose --profile openhands stop openhands
+docker compose --profile litellm stop litellm
+```
 
 ## Safety Checklist
 

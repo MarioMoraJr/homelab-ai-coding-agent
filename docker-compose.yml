@@ -7,7 +7,7 @@ services:
     container_name: homelab_code_server
     restart: unless-stopped
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     environment:
       PASSWORD: ${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}
       OLLAMA_HOST: http://host.docker.internal:11434
@@ -31,7 +31,7 @@ services:
     container_name: homelab_open_webui
     restart: unless-stopped
     ports:
-      - "8082:8080"
+      - "127.0.0.1:8082:8080"
     environment:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
     volumes:
@@ -44,7 +44,7 @@ services:
       - litellm
     restart: unless-stopped
     ports:
-      - "8084:4000"
+      - "127.0.0.1:8084:4000"
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local}
     command:
@@ -66,7 +66,7 @@ services:
       - openhands
     restart: unless-stopped
     ports:
-      - "8083:3000"
+      - "127.0.0.1:8083:3000"
     environment:
       AGENT_SERVER_IMAGE_REPOSITORY: homelab-openhands-agent-server
       AGENT_SERVER_IMAGE_TAG: latest
@@ -95,7 +95,7 @@ services:
       - mobile
     restart: unless-stopped
     ports:
-      - "8086:8080"
+      - "127.0.0.1:8086:8080"
     environment:
       MOBILE_AGENT_PASSWORD: ${MOBILE_AGENT_PASSWORD:-${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
