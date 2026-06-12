@@ -84,6 +84,20 @@ After rebuilding code-server, open a code-server terminal and run Gemini once to
 gemini
 ```
 
+Choose `Login with Google` for the lowest-friction free-quota path when browser login works. The `gemini-cli-data` Docker volume persists `/home/coder/.gemini` across code-server container recreates.
+
+For headless/API-key mode, set this in the host `.env` file and recreate code-server:
+
+```text
+GEMINI_API_KEY=<your-ai-studio-key>
+```
+
+Then:
+
+```cmd
+docker compose up -d code-server
+```
+
 Then use the helper from a project folder:
 
 ```bash

@@ -22,6 +22,17 @@ fi
 echo "agent-gemini"
 echo "workdir: ${workdir}"
 
+if [ ! -f /home/coder/.gemini/settings.json ] \
+    && [ -z "${GEMINI_API_KEY:-}" ] \
+    && [ -z "${GOOGLE_GENAI_USE_VERTEXAI:-}" ] \
+    && [ -z "${GOOGLE_GENAI_USE_GCA:-}" ]; then
+    echo
+    echo "Gemini CLI auth is not configured."
+    echo "Run 'gemini' once and choose an auth method, or set GEMINI_API_KEY in the host .env file and recreate code-server."
+    echo "The /home/coder/.gemini folder is persisted by the gemini-cli-data Docker volume."
+    exit 1
+fi
+
 if [ "${1:-}" = "--interactive" ]; then
     echo
     echo "starting Gemini CLI interactive session..."

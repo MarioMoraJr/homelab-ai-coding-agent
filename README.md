@@ -205,6 +205,8 @@ Gemini CLI runs locally in the same terminal and can read files, write files, an
 agent-gemini "Inspect this project, run its tests, and make one small safe fix."
 ```
 
+The `gemini-cli-data` Docker volume persists `/home/coder/.gemini` across container recreates. For headless/API-key mode, set `GEMINI_API_KEY` in the host `.env` file and recreate `code-server`.
+
 Review changes before committing:
 
 ```bash

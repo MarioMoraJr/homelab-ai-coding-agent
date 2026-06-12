@@ -12,9 +12,14 @@ services:
       PASSWORD: ${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}
       OLLAMA_HOST: http://host.docker.internal:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-}
+      GOOGLE_GENAI_USE_GCA: ${GOOGLE_GENAI_USE_GCA:-}
     volumes:
       - ./workspace:/home/coder/workspace
       - ./config/agent-rules.md:/home/coder/agent-rules.md:ro
+      - gemini-cli-data:/home/coder/.gemini
     working_dir: /home/coder/workspace
     entrypoint:
       - /bin/sh
@@ -83,3 +88,4 @@ services:
 volumes:
   open-webui-data:
   openhands-data:
+  gemini-cli-data:

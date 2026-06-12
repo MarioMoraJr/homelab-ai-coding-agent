@@ -23,6 +23,9 @@ RUN apt-get update \
 
 RUN npm install -g @openai/codex @google/gemini-cli
 
+RUN mkdir -p /home/coder/.gemini \
+    && chown -R coder:coder /home/coder/.gemini
+
 COPY scripts/agent-local /usr/local/bin/agent-local
 COPY scripts/agent-gemini /usr/local/bin/agent-gemini
 COPY scripts/agent-doctor /usr/local/bin/agent-doctor
