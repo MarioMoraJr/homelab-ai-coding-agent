@@ -148,14 +148,6 @@ Base URL: http://host.docker.internal:8084/v1
 API Key: sk-local
 ```
 
-LFM tool-calling probe model:
-
-```text
-Custom Model: openai/lfm25-8b-ollama-chat
-Base URL: http://host.docker.internal:8084/v1
-API Key: sk-local
-```
-
 Current LiteLLM result:
 
 ```text

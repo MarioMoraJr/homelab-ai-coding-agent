@@ -121,7 +121,6 @@ Available proxy model names:
 ```text
 qwen25-coder-7b-ollama-chat
 llama31-8b-ollama-chat
-lfm25-8b-ollama-chat
 ```
 
 The proxy API key is:

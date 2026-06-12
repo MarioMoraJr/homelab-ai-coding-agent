@@ -11,12 +11,6 @@ model_list:
       api_base: http://host.docker.internal:11434
       api_key: local-llm
       temperature: 0
-  - model_name: lfm25-8b-ollama-chat
-    litellm_params:
-      model: ollama_chat/lfm2.5:8b
-      api_base: http://host.docker.internal:11434
-      api_key: local-llm
-      temperature: 0
 
 litellm_settings:
   drop_params: true
