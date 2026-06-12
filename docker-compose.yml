@@ -8,8 +8,22 @@ services:
     environment:
       PASSWORD: ${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}
       OLLAMA_HOST: http://host.docker.internal:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:14b}
     volumes:
       - ./workspace:/home/coder/workspace
       - ./config/agent-rules.md:/home/coder/agent-rules.md:ro
     working_dir: /home/coder/workspace
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: homelab_open_webui
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    volumes:
+      - open-webui-data:/app/backend/data
+
+volumes:
+  open-webui-data:

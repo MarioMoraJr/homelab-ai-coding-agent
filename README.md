@@ -10,6 +10,7 @@ Build a private Codex-style coding environment that can run on my own laptop/ser
 
 - Docker
 - code-server
+- Open WebUI
 - GitHub CLI
 - Tailscale
 - Local workspaces
@@ -59,6 +60,12 @@ Open code-server:
 http://localhost:8081
 ```
 
+Open the model chat UI:
+
+```text
+http://localhost:8082
+```
+
 ## Remote Access
 
 The code-server container is reachable over Tailscale from trusted devices using the machine's Tailscale HTTPS address:
@@ -80,7 +87,9 @@ http://host.docker.internal:11434
 The starter model is configured in `.env`:
 
 ```text
-OLLAMA_MODEL=llama3.1:8b
+OLLAMA_MODEL=qwen2.5-coder:14b
 ```
 
 The code-server container receives both `OLLAMA_HOST` and `OLLAMA_MODEL` as environment variables so agent tools can use the local model service.
+
+Open WebUI runs on port `8082` and connects to the same host Ollama service. Use it to chat with installed models and switch between available Ollama models from the browser.
