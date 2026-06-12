@@ -87,7 +87,7 @@ http://host.docker.internal:11434
 The starter model is configured in `.env`:
 
 ```text
-OLLAMA_MODEL=qwen2.5-coder:14b
+OLLAMA_MODEL=qwen2.5-coder:7b
 ```
 
 The code-server container receives both `OLLAMA_HOST` and `OLLAMA_MODEL` as environment variables so agent tools can use the local model service.

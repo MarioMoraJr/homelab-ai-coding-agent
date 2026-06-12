@@ -8,7 +8,7 @@ services:
     environment:
       PASSWORD: ${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}
       OLLAMA_HOST: http://host.docker.internal:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:14b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
     volumes:
       - ./workspace:/home/coder/workspace
       - ./config/agent-rules.md:/home/coder/agent-rules.md:ro
