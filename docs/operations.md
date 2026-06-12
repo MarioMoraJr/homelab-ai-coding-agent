@@ -104,6 +104,14 @@ Base URL: http://host.docker.internal:8084/v1
 API Key: sk-local
 ```
 
+LFM tool-calling probe model:
+
+```text
+Custom Model: openai/lfm25-8b-ollama-chat
+Base URL: http://host.docker.internal:8084/v1
+API Key: sk-local
+```
+
 Current LiteLLM result:
 
 ```text
@@ -111,6 +119,7 @@ LiteLLM /v1/models works.
 LiteLLM /v1/chat/completions works for simple chat.
 OpenHands can select openai/qwen25-coder-7b-ollama-chat.
 OpenHands still does not create the smoke-test README.md because qwen2.5-coder:7b returns tool-call-looking JSON as assistant content instead of structured tool_calls.
+lfm2.5:8b returns structured tool_calls in direct Ollama and LiteLLM OpenAI-compatible probes, but it still answered in chat text instead of using OpenHands terminal/file actions during the smoke test.
 ```
 
 Temporary llama.cpp test used the existing Ollama GGUF blob for `qwen2.5-coder:7b` and proved that llama.cpp can serve the model on this RTX 4050, but it did not fix OpenHands tool execution:
@@ -178,9 +187,12 @@ qwen2.5-coder:7b: connected, but emitted JSON-looking create_file text instead o
 llama3.1:8b: connected, but emitted pseudo-command text instead of editing.
 qwen2.5-coder:7b through LiteLLM ollama_chat: connected, but emitted JSON-looking invoke_skill text instead of editing.
 qwen2.5-coder:7b through llama.cpp server-cuda: served successfully, but did not emit structured tool_calls in direct probes.
+qwen3:4b direct Ollama probe emitted structured tool_calls, but OpenHands falsely finished once and then emitted pseudo invoke_skill text.
+granite3.3:8b direct Ollama probe did not emit tool_calls.
+lfm2.5:8b direct Ollama and LiteLLM OpenAI-compatible probes emitted structured tool_calls, but OpenHands replied with file content or command text instead of executing terminal/file actions.
 ```
 
-Next model/server test should focus on a pair with known structured tool-call support, not another generic OpenAI-compatible proxy. The current blocker is the missing `tool_calls` array in model responses.
+Next model/server test should focus on a model/runtime pair known to work with OpenHands-style agent actions. Direct `tool_calls` support is necessary but not sufficient: `qwen3:4b` and `lfm2.5:8b` both passed direct tool-call probes yet still failed the OpenHands README creation smoke test.
 
 Review changes:
 

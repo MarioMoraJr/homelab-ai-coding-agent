@@ -64,7 +64,7 @@ docker compose --profile litellm up -d litellm
 
 It exposes an OpenAI-compatible API on host port `8084` and routes to the Windows-host Ollama service using LiteLLM's `ollama_chat` provider.
 
-LiteLLM is useful for normalizing access to local model providers, but it does not make a model produce structured tool calls by itself. In testing, `qwen2.5-coder:7b` through LiteLLM still returned tool-call-looking JSON in assistant message content instead of a real OpenAI-compatible `tool_calls` array.
+LiteLLM is useful for normalizing access to local model providers, but it does not make a model execute agent actions by itself. In testing, `qwen2.5-coder:7b` through LiteLLM still returned tool-call-looking JSON in assistant message content instead of a real OpenAI-compatible `tool_calls` array. `lfm2.5:8b` did return structured `tool_calls` in direct Ollama and LiteLLM probes, but still answered in chat text rather than using OpenHands actions during the README creation smoke test.
 
 ## Agent Flow
 
@@ -136,4 +136,6 @@ The sandbox uses a small local image built from `Dockerfile.openhands-agent`. It
 - OpenHands may still require a stronger local agentic coding model for reliable tool use.
 - OpenHands successfully starts against local Ollama, but `qwen2.5-coder:7b` and `llama3.1:8b` produced tool-call-looking text during a README creation smoke test instead of editing files.
 - LiteLLM with `ollama_chat` and llama.cpp server-cuda both served `qwen2.5-coder:7b`, but neither made the current model emit structured `tool_calls` for OpenHands.
-- The known next path is testing a model/runtime pair with documented structured tool-call support, such as a newer Qwen coder/instruct model served through vLLM or SGLang with the matching tool-call parser.
+- `qwen3:4b` and `lfm2.5:8b` passed direct Ollama tool-call probes, but still failed OpenHands file-creation smoke tests.
+- `granite3.3:8b` did not emit tool calls in direct Ollama probes.
+- The known next path is testing a model/runtime pair documented to work for full agent action execution, such as a newer Qwen coder/instruct model served through vLLM or SGLang with the matching tool-call parser.
