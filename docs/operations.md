@@ -58,6 +58,10 @@ docker exec homelab_code_server sh -lc "wget -qO- http://127.0.0.1:11434/api/tag
 Open code-server, then use its terminal:
 
 ```bash
+agent-doctor
+```
+
+```bash
 cd /home/coder/workspace/<project-folder>
 agent-local "Inspect this project and suggest one small improvement."
 ```

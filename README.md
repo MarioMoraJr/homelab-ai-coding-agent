@@ -116,6 +116,12 @@ cd /home/coder/workspace/<project-folder>
 agent-local "Inspect this project and suggest one small improvement."
 ```
 
+Check the local agent toolchain:
+
+```bash
+agent-doctor
+```
+
 Use a different local model:
 
 ```bash

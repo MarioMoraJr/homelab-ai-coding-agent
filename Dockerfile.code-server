@@ -24,7 +24,8 @@ RUN apt-get update \
 RUN npm install -g @openai/codex
 
 COPY scripts/agent-local /usr/local/bin/agent-local
-RUN chmod +x /usr/local/bin/agent-local
+COPY scripts/agent-doctor /usr/local/bin/agent-doctor
+RUN chmod +x /usr/local/bin/agent-local /usr/local/bin/agent-doctor
 
 USER coder
 

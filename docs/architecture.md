@@ -57,6 +57,10 @@ This lets Codex CLI use Ollama as a local provider from inside the container.
 Inside code-server:
 
 ```bash
+agent-doctor
+```
+
+```bash
 cd /home/coder/workspace/<project-folder>
 agent-local "Inspect this project and suggest one small improvement."
 ```

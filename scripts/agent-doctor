@@ -1,0 +1,56 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "agent-doctor"
+echo
+
+echo "workspace:"
+if [ -d /home/coder/workspace ]; then
+    echo "  ok: /home/coder/workspace exists"
+else
+    echo "  error: /home/coder/workspace is missing"
+    exit 1
+fi
+
+echo
+echo "tools:"
+for tool in git node npm python3 pip3 codex bwrap rg jq tree make gcc agent-local; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        printf "  ok: %s -> %s\n" "$tool" "$(command -v "$tool")"
+    else
+        printf "  missing: %s\n" "$tool"
+        exit 1
+    fi
+done
+
+echo
+echo "versions:"
+git --version | sed 's/^/  /'
+node --version | sed 's/^/  node /'
+npm --version | sed 's/^/  npm /'
+python3 --version | sed 's/^/  /'
+codex --version | sed 's/^/  /'
+rg --version | head -1 | sed 's/^/  /'
+jq --version | sed 's/^/  /'
+tree --version | sed 's/^/  /'
+make --version | head -1 | sed 's/^/  /'
+gcc --version | head -1 | sed 's/^/  /'
+
+echo
+echo "ollama:"
+if wget -qO- http://127.0.0.1:11434/api/tags >/tmp/ollama-tags.json; then
+    echo "  ok: http://127.0.0.1:11434/api/tags"
+    jq -r '.models[].name' /tmp/ollama-tags.json | sed 's/^/  model: /'
+else
+    echo "  error: Ollama is not reachable at http://127.0.0.1:11434"
+    echo "  hint: start this container with docker compose so the Ollama forwarder runs"
+    exit 1
+fi
+
+echo
+echo "git:"
+git config --global --add safe.directory /home/coder/workspace >/dev/null 2>&1 || true
+echo "  ok: /home/coder/workspace marked safe"
+
+echo
+echo "ready"
