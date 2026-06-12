@@ -315,6 +315,25 @@ docker compose --profile openhands stop openhands
 docker compose --profile litellm stop litellm
 ```
 
+## Tailscale Serve
+
+Current tailnet HTTPS routes:
+
+```text
+https://mechatop.taileb08fa.ts.net/code/  -> http://127.0.0.1:8081
+https://mechatop.taileb08fa.ts.net/agent/ -> http://127.0.0.1:8086
+```
+
+Commands used:
+
+```cmd
+tailscale serve --bg --yes --set-path /code http://127.0.0.1:8081
+tailscale serve --bg --yes --set-path /agent http://127.0.0.1:8086
+tailscale serve status
+```
+
+The `/` route is intentionally left unchanged because this machine already served another local app there.
+
 ## Safety Checklist
 
 - Keep `.env` private.

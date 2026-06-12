@@ -25,6 +25,8 @@ Tailscale HTTPS access is handled outside this Compose stack. Use the machine's 
 
 Published Compose ports are bound to `127.0.0.1` on the host. Phone access should go through Tailscale Serve or a local reverse proxy rather than direct raw port exposure.
 
+Current Tailscale Serve routes expose code-server at `/code/` and Mobile Agent UI at `/agent/` on the machine's tailnet HTTPS name.
+
 ## Workspace Boundary
 
 Only this project folder is mounted into the coding container:

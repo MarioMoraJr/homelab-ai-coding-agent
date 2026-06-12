@@ -10,9 +10,14 @@ const jobStatus = document.querySelector('#job-status');
 const commitMessage = document.querySelector('#commit-message');
 const logoutButton = document.querySelector('#logout');
 let pollTimer = null;
+const basePath = window.location.pathname.replace(/\/$/, '');
+
+function apiUrl(path) {
+  return `${basePath}${path}`;
+}
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
   });
