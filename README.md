@@ -100,6 +100,35 @@ The code-server container receives both `OLLAMA_HOST` and `OLLAMA_MODEL` as envi
 
 Open WebUI runs on port `8082` and connects to the same host Ollama service. Use it to chat with installed models and switch between available Ollama models from the browser.
 
+## LiteLLM
+
+LiteLLM is included as an optional proxy for testing Ollama through LiteLLM's `ollama_chat` adapter instead of Ollama's raw OpenAI-compatible endpoint.
+
+Start LiteLLM:
+
+```cmd
+docker compose --profile litellm up -d litellm
+```
+
+OpenAI-compatible URL:
+
+```text
+http://localhost:8084/v1
+```
+
+Available proxy model names:
+
+```text
+qwen25-coder-7b-ollama-chat
+llama31-8b-ollama-chat
+```
+
+The proxy API key is:
+
+```text
+sk-local
+```
+
 ## OpenHands
 
 OpenHands is included as an optional agent runtime for testing local model file-editing behavior. It is behind a Compose profile so the stable code-server and Open WebUI stack still starts with the normal command.
@@ -179,6 +208,12 @@ git commit -m "Describe the change"
 Current local-model note: Ollama-backed Codex CLI is useful for chat, inspection, and planning. Some small local models may produce tool-call-looking text instead of reliably editing files, so always check `git diff` and expect to manually apply or adjust small changes.
 
 OpenHands smoke-test note: `qwen2.5-coder:7b` and `llama3.1:8b` both connected through Ollama and completed conversations, but neither created the requested test file. They produced tool-call-looking or pseudo-command text instead of executing OpenHands tools.
+
+LiteLLM smoke-test note: LiteLLM successfully proxies Ollama through `ollama_chat`, and OpenHands can use the `openai/qwen25-coder-7b-ollama-chat` profile. The same README creation smoke test still failed because the model returned JSON text like `{"name": "invoke_skill", ...}` in message content instead of a structured OpenAI `tool_calls` array.
+
+llama.cpp smoke-test note: the existing Ollama GGUF blob for `qwen2.5-coder:7b` can be served by `ghcr.io/ggml-org/llama.cpp:server-cuda` on this 6 GB RTX 4050, but tool-call probes also returned JSON-in-content instead of structured `tool_calls`. This makes llama.cpp a working inference server for chat/completions here, but not a fix for OpenHands tool execution with this model.
+
+Known next path: test a local model/server pair that is documented to emit real OpenAI-compatible tool calls, preferably a newer Qwen coder/instruct model with a matching vLLM or SGLang tool parser. The current blocker is not basic connectivity; it is structured tool-call compatibility.
 
 Rebuild after changing the Dockerfile:
 

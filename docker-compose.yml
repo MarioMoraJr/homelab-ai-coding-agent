@@ -32,6 +32,28 @@ services:
     volumes:
       - open-webui-data:/app/backend/data
 
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: homelab_litellm
+    profiles:
+      - litellm
+    restart: unless-stopped
+    ports:
+      - "8084:4000"
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local}
+    command:
+      - --config
+      - /app/config.yaml
+      - --port
+      - "4000"
+      - --host
+      - 0.0.0.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./config/litellm.yaml:/app/config.yaml:ro
+
   openhands:
     image: docker.openhands.dev/openhands/openhands:1.8
     container_name: homelab_openhands

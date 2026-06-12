@@ -1,0 +1,19 @@
+model_list:
+  - model_name: qwen25-coder-7b-ollama-chat
+    litellm_params:
+      model: ollama_chat/qwen2.5-coder:7b
+      api_base: http://host.docker.internal:11434
+      api_key: local-llm
+      temperature: 0
+  - model_name: llama31-8b-ollama-chat
+    litellm_params:
+      model: ollama_chat/llama3.1:8b
+      api_base: http://host.docker.internal:11434
+      api_key: local-llm
+      temperature: 0
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

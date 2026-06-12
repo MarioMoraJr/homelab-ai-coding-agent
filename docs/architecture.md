@@ -16,6 +16,7 @@ This project runs a private AI coding workspace on a Windows homelab machine usi
 | --- | --- | --- | --- |
 | code-server | `homelab_code_server` | `http://localhost:8081` | Browser-based coding workspace |
 | Open WebUI | `homelab_open_webui` | `http://localhost:8082` | Browser chat UI for Ollama models |
+| LiteLLM | `homelab_litellm` | `http://localhost:8084` | Optional OpenAI-compatible proxy for Ollama |
 | Ollama | Windows host process | `http://127.0.0.1:11434` | Local model runtime |
 | OpenHands | `homelab_openhands` | `http://localhost:8083` | Optional dedicated coding-agent runtime |
 
@@ -52,6 +53,18 @@ The code-server container also starts a local forward:
 ```
 
 This lets Codex CLI use Ollama as a local provider from inside the container.
+
+## LiteLLM Flow
+
+LiteLLM runs only when the `litellm` Compose profile is enabled:
+
+```cmd
+docker compose --profile litellm up -d litellm
+```
+
+It exposes an OpenAI-compatible API on host port `8084` and routes to the Windows-host Ollama service using LiteLLM's `ollama_chat` provider.
+
+LiteLLM is useful for normalizing access to local model providers, but it does not make a model produce structured tool calls by itself. In testing, `qwen2.5-coder:7b` through LiteLLM still returned tool-call-looking JSON in assistant message content instead of a real OpenAI-compatible `tool_calls` array.
 
 ## Agent Flow
 
@@ -122,3 +135,5 @@ The sandbox uses a small local image built from `Dockerfile.openhands-agent`. It
 - Open WebUI is useful for model switching and chat, but it does not replace code review.
 - OpenHands may still require a stronger local agentic coding model for reliable tool use.
 - OpenHands successfully starts against local Ollama, but `qwen2.5-coder:7b` and `llama3.1:8b` produced tool-call-looking text during a README creation smoke test instead of editing files.
+- LiteLLM with `ollama_chat` and llama.cpp server-cuda both served `qwen2.5-coder:7b`, but neither made the current model emit structured `tool_calls` for OpenHands.
+- The known next path is testing a model/runtime pair with documented structured tool-call support, such as a newer Qwen coder/instruct model served through vLLM or SGLang with the matching tool-call parser.

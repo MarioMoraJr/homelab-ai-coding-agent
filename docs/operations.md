@@ -38,6 +38,7 @@ docker ps --filter "name=homelab_"
 ```cmd
 docker logs homelab_code_server
 docker logs homelab_open_webui
+docker logs homelab_litellm
 docker logs homelab_openhands
 ```
 
@@ -71,6 +72,60 @@ Use a different local model:
 
 ```bash
 agent-local --model llama3.1:8b "Inspect this project and suggest one small improvement."
+```
+
+## Start LiteLLM
+
+LiteLLM is optional and uses host port `8084`.
+
+```cmd
+docker compose --profile litellm up -d litellm
+```
+
+Check LiteLLM can list configured models:
+
+```cmd
+curl http://localhost:8084/v1/models -H "Authorization: Bearer sk-local"
+```
+
+Use these OpenHands advanced LLM settings to test through LiteLLM:
+
+```text
+Custom Model: openai/qwen25-coder-7b-ollama-chat
+Base URL: http://host.docker.internal:8084/v1
+API Key: sk-local
+```
+
+Alternate model:
+
+```text
+Custom Model: openai/llama31-8b-ollama-chat
+Base URL: http://host.docker.internal:8084/v1
+API Key: sk-local
+```
+
+Current LiteLLM result:
+
+```text
+LiteLLM /v1/models works.
+LiteLLM /v1/chat/completions works for simple chat.
+OpenHands can select openai/qwen25-coder-7b-ollama-chat.
+OpenHands still does not create the smoke-test README.md because qwen2.5-coder:7b returns tool-call-looking JSON as assistant content instead of structured tool_calls.
+```
+
+Temporary llama.cpp test used the existing Ollama GGUF blob for `qwen2.5-coder:7b` and proved that llama.cpp can serve the model on this RTX 4050, but it did not fix OpenHands tool execution:
+
+```cmd
+docker run -d --name homelab_llamacpp_test --gpus all -p 8085:8080 -v C:\Users\mario\.ollama\models\blobs\<qwen-blob>:/models/qwen2.5-coder-7b.gguf:ro ghcr.io/ggml-org/llama.cpp:server-cuda -m /models/qwen2.5-coder-7b.gguf --host 0.0.0.0 --port 8080 --jinja -ngl 99 -c 8192
+```
+
+Result:
+
+```text
+llama.cpp /v1/models works.
+llama.cpp /v1/chat/completions works.
+Tool-call probes returned JSON inside message.content, not message.tool_calls.
+Do not treat llama.cpp plus the current qwen2.5-coder:7b GGUF as an OpenHands fix.
 ```
 
 ## Start OpenHands
@@ -121,7 +176,11 @@ Current smoke-test result:
 ```text
 qwen2.5-coder:7b: connected, but emitted JSON-looking create_file text instead of editing.
 llama3.1:8b: connected, but emitted pseudo-command text instead of editing.
+qwen2.5-coder:7b through LiteLLM ollama_chat: connected, but emitted JSON-looking invoke_skill text instead of editing.
+qwen2.5-coder:7b through llama.cpp server-cuda: served successfully, but did not emit structured tool_calls in direct probes.
 ```
+
+Next model/server test should focus on a pair with known structured tool-call support, not another generic OpenAI-compatible proxy. The current blocker is the missing `tool_calls` array in model responses.
 
 Review changes:
 
@@ -159,6 +218,7 @@ curl http://127.0.0.1:3100/status
 | `8081` | code-server |
 | `8082` | Open WebUI |
 | `8083` | OpenHands |
+| `8084` | LiteLLM |
 | `11434` | Ollama on Windows host |
 | `3100` | Express demo app |
 
