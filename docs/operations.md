@@ -320,15 +320,15 @@ docker compose --profile litellm stop litellm
 Current tailnet HTTPS routes:
 
 ```text
-https://mechatop.taileb08fa.ts.net/code/  -> http://127.0.0.1:8081
-https://mechatop.taileb08fa.ts.net/agent/ -> http://127.0.0.1:8086
+https://mechatop.taileb08fa.ts.net:8444/ -> http://127.0.0.1:8081
+https://mechatop.taileb08fa.ts.net:8443/ -> http://127.0.0.1:8086
 ```
 
 Commands used:
 
 ```cmd
-tailscale serve --bg --yes --set-path /code http://127.0.0.1:8081
-tailscale serve --bg --yes --set-path /agent http://127.0.0.1:8086
+tailscale serve --bg --yes --https=8444 http://127.0.0.1:8081
+tailscale serve --bg --yes --https=8443 http://127.0.0.1:8086
 tailscale serve status
 ```
 
