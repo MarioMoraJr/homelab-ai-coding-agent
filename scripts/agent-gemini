@@ -1,0 +1,56 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: agent-gemini \"your coding task\"" >&2
+    echo "       agent-gemini --interactive" >&2
+    exit 2
+fi
+
+if ! command -v gemini >/dev/null 2>&1; then
+    echo "error: Gemini CLI is not installed" >&2
+    echo "hint: rebuild code-server after updating Dockerfile.code-server" >&2
+    exit 1
+fi
+
+workdir="$(pwd)"
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git config --global --add safe.directory /home/coder/workspace >/dev/null 2>&1 || true
+fi
+
+echo "agent-gemini"
+echo "workdir: ${workdir}"
+
+if [ "${1:-}" = "--interactive" ]; then
+    echo
+    echo "starting Gemini CLI interactive session..."
+    exec gemini
+fi
+
+prompt="$*"
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo
+    echo "git status before run:"
+    git status --short
+else
+    echo
+    echo "warning: current directory is not inside a Git repo"
+fi
+
+echo
+echo "running Gemini CLI..."
+
+gemini --prompt "${prompt}"
+
+echo
+echo "Gemini CLI finished"
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo
+    echo "git status after run:"
+    git status --short
+    echo
+    echo "review changes with: git diff"
+fi

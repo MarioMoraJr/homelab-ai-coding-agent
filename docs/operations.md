@@ -74,6 +74,36 @@ Use a different local model:
 agent-local --model llama3.1:8b "Inspect this project and suggest one small improvement."
 ```
 
+## Use the hybrid Gemini CLI helper
+
+Gemini CLI is an optional hybrid path: the model is remote, but file edits and shell commands execute locally inside the code-server container and the mounted workspace.
+
+After rebuilding code-server, open a code-server terminal and run Gemini once to authenticate:
+
+```bash
+gemini
+```
+
+Then use the helper from a project folder:
+
+```bash
+cd /home/coder/workspace/<project-folder>
+agent-gemini "Inspect this project, run its tests, and make one small safe fix."
+```
+
+For a longer interactive session:
+
+```bash
+agent-gemini --interactive
+```
+
+Review changes after every run:
+
+```bash
+git diff
+git status
+```
+
 ## Start LiteLLM
 
 LiteLLM is optional and uses host port `8084`.

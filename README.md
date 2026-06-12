@@ -121,6 +121,7 @@ Available proxy model names:
 ```text
 qwen25-coder-7b-ollama-chat
 llama31-8b-ollama-chat
+lfm25-8b-ollama-chat
 ```
 
 The proxy API key is:
@@ -164,7 +165,7 @@ docker compose --profile openhands stop openhands
 
 ## Coding Agent Tools
 
-The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, venv support, Codex CLI, Bubblewrap sandbox support, `ripgrep`, `jq`, `tree`, build tools, and `socat` for local service forwarding.
+The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, venv support, Codex CLI, Gemini CLI, Bubblewrap sandbox support, `ripgrep`, `jq`, `tree`, build tools, and `socat` for local service forwarding.
 
 Inside code-server, Codex CLI can use the host Ollama service through a localhost forward:
 
@@ -191,6 +192,19 @@ Use a different local model:
 agent-local --model llama3.1:8b "Inspect this project and suggest one small improvement."
 ```
 
+Hybrid low-cost path:
+
+```bash
+cd /home/coder/workspace/<project-folder>
+agent-gemini --interactive
+```
+
+Gemini CLI runs locally in the same terminal and can read files, write files, and run shell commands from the mounted workspace. The model is remote, but execution stays inside the code-server container. Run `gemini` once to authenticate with a Google account or configure the API key mode supported by Gemini CLI, then use:
+
+```bash
+agent-gemini "Inspect this project, run its tests, and make one small safe fix."
+```
+
 Review changes before committing:
 
 ```bash
@@ -206,6 +220,8 @@ git commit -m "Describe the change"
 ```
 
 Current local-model note: Ollama-backed Codex CLI is useful for chat, inspection, and planning. Some small local models may produce tool-call-looking text instead of reliably editing files, so always check `git diff` and expect to manually apply or adjust small changes.
+
+Hybrid-agent note: for reliable command execution with little to no usage cost, Gemini CLI is the current best optional path to test. It uses a remote Gemini model but executes file and shell actions locally in the workspace container.
 
 OpenHands smoke-test note: `qwen2.5-coder:7b` and `llama3.1:8b` both connected through Ollama and completed conversations, but neither created the requested test file. They produced tool-call-looking or pseudo-command text instead of executing OpenHands tools.
 

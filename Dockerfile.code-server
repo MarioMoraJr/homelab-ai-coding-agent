@@ -21,11 +21,12 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex @google/gemini-cli
 
 COPY scripts/agent-local /usr/local/bin/agent-local
+COPY scripts/agent-gemini /usr/local/bin/agent-gemini
 COPY scripts/agent-doctor /usr/local/bin/agent-doctor
-RUN chmod +x /usr/local/bin/agent-local /usr/local/bin/agent-doctor
+RUN chmod +x /usr/local/bin/agent-local /usr/local/bin/agent-gemini /usr/local/bin/agent-doctor
 
 USER coder
 

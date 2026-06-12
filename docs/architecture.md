@@ -93,6 +93,16 @@ codex exec --oss --local-provider ollama -m qwen2.5-coder:7b --sandbox workspace
 
 Always review `git diff` before committing.
 
+## Hybrid Agent Flow
+
+For a lower-cost route with more reliable command execution than the tested local Ollama models, the code-server image also includes Gemini CLI:
+
+```bash
+agent-gemini --interactive
+```
+
+In this mode, model inference is remote through Gemini CLI, while file reads, file writes, and shell commands run locally inside the code-server container against `/home/coder/workspace`. This keeps project execution and workspace boundaries local, but it is not fully offline.
+
 ## OpenHands Flow
 
 OpenHands runs only when the `openhands` Compose profile is enabled:

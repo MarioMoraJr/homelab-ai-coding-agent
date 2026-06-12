@@ -14,7 +14,7 @@ fi
 
 echo
 echo "tools:"
-for tool in git node npm python3 pip3 codex bwrap rg jq tree make gcc agent-local; do
+for tool in git node npm python3 pip3 codex gemini bwrap rg jq tree make gcc agent-local agent-gemini; do
     if command -v "$tool" >/dev/null 2>&1; then
         printf "  ok: %s -> %s\n" "$tool" "$(command -v "$tool")"
     else
@@ -30,6 +30,7 @@ node --version | sed 's/^/  node /'
 npm --version | sed 's/^/  npm /'
 python3 --version | sed 's/^/  /'
 codex --version | sed 's/^/  /'
+gemini --version | sed 's/^/  gemini /'
 rg --version | head -1 | sed 's/^/  /'
 jq --version | sed 's/^/  /'
 tree --version | sed 's/^/  /'
