@@ -78,6 +78,7 @@ agent-local --model llama3.1:8b "Inspect this project and suggest one small impr
 OpenHands is optional and uses host port `8083`.
 
 ```cmd
+docker build -f Dockerfile.openhands-agent -t homelab-openhands-agent-server:latest .
 docker compose --profile openhands up -d openhands
 ```
 
@@ -95,6 +96,14 @@ Base URL: http://host.docker.internal:11434/v1
 API Key: local-llm
 ```
 
+OpenHands sees this repo's `workspace/` folder at:
+
+```text
+/workspace/project
+```
+
+The sandbox callback host is `host.docker.internal:8083`; keep this aligned with the host port mapping.
+
 Check OpenHands can reach Ollama:
 
 ```cmd
@@ -105,6 +114,13 @@ Stop only OpenHands:
 
 ```cmd
 docker compose --profile openhands stop openhands
+```
+
+Current smoke-test result:
+
+```text
+qwen2.5-coder:7b: connected, but emitted JSON-looking create_file text instead of editing.
+llama3.1:8b: connected, but emitted pseudo-command text instead of editing.
 ```
 
 Review changes:

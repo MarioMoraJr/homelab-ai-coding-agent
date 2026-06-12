@@ -107,6 +107,7 @@ OpenHands is included as an optional agent runtime for testing local model file-
 Start OpenHands:
 
 ```cmd
+docker build -f Dockerfile.openhands-agent -t homelab-openhands-agent-server:latest .
 docker compose --profile openhands up -d openhands
 ```
 
@@ -124,7 +125,7 @@ Base URL: http://host.docker.internal:11434/v1
 API Key: local-llm
 ```
 
-If the UI prompts for setup, open the advanced LLM settings and use those values. The OpenHands sandbox mounts only this repo's `workspace/` folder at `/workspace`.
+If the UI prompts for setup, open the advanced LLM settings and use those values. The OpenHands sandbox mounts only this repo's `workspace/` folder at `/workspace/project`.
 
 Stop OpenHands without stopping the stable base stack:
 
@@ -176,6 +177,8 @@ git commit -m "Describe the change"
 ```
 
 Current local-model note: Ollama-backed Codex CLI is useful for chat, inspection, and planning. Some small local models may produce tool-call-looking text instead of reliably editing files, so always check `git diff` and expect to manually apply or adjust small changes.
+
+OpenHands smoke-test note: `qwen2.5-coder:7b` and `llama3.1:8b` both connected through Ollama and completed conversations, but neither created the requested test file. They produced tool-call-looking or pseudo-command text instead of executing OpenHands tools.
 
 Rebuild after changing the Dockerfile:
 

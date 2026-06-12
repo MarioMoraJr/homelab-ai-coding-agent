@@ -1,0 +1,16 @@
+FROM ghcr.io/openhands/agent-server:1.26.0-python
+
+USER root
+RUN git config --system --add safe.directory /workspace/project
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    'if [ -n "${OH_WEBHOOKS_0_BASE_URL:-}" ]; then' \
+    '  export OH_WEBHOOKS_0_BASE_URL="$(printf "%s" "$OH_WEBHOOKS_0_BASE_URL" | sed "s#host.docker.internal:3000#host.docker.internal:8083#g")"' \
+    'fi' \
+    'exec /usr/local/bin/openhands-agent-server "$@"' \
+    > /usr/local/bin/homelab-openhands-agent-server \
+    && chmod +x /usr/local/bin/homelab-openhands-agent-server
+USER openhands
+
+ENTRYPOINT ["tini", "--", "/usr/local/bin/homelab-openhands-agent-server"]

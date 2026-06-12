@@ -41,14 +41,17 @@ services:
     ports:
       - "8083:3000"
     environment:
-      AGENT_SERVER_IMAGE_REPOSITORY: ghcr.io/openhands/agent-server
-      AGENT_SERVER_IMAGE_TAG: 1.26.0-python
+      AGENT_SERVER_IMAGE_REPOSITORY: homelab-openhands-agent-server
+      AGENT_SERVER_IMAGE_TAG: latest
       LOG_ALL_EVENTS: "true"
       OH_PERSISTENCE_DIR: /.openhands
+      WEB_HOST: ${OPENHANDS_WEB_HOST:-host.docker.internal:8083}
+      OH_WEB_URL: ${OPENHANDS_WEB_URL:-http://host.docker.internal:8083}
       LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-local-llm}
       LLM_MODEL: ${OPENHANDS_LLM_MODEL:-openai/qwen2.5-coder:7b}
       LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
-      SANDBOX_VOLUMES: ${OPENHANDS_SANDBOX_VOLUMES:-/run/desktop/mnt/host/c/Users/mario/server/ai-coding-agent/workspace:/workspace:rw}
+      SANDBOX_USER_ID: ${OPENHANDS_SANDBOX_USER_ID:-1000}
+      SANDBOX_VOLUMES: ${OPENHANDS_SANDBOX_VOLUMES:-/run/desktop/mnt/host/c/Users/mario/server/ai-coding-agent/workspace:/workspace/project:rw}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

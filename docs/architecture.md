@@ -85,6 +85,7 @@ Always review `git diff` before committing.
 OpenHands runs only when the `openhands` Compose profile is enabled:
 
 ```cmd
+docker build -f Dockerfile.openhands-agent -t homelab-openhands-agent-server:latest .
 docker compose --profile openhands up -d openhands
 ```
 
@@ -94,13 +95,24 @@ The web app listens on host port `8083` because port `3000` is already used by a
 http://host.docker.internal:11434/v1
 ```
 
+The sandbox callback URL is set to:
+
+```text
+WEB_HOST=host.docker.internal:8083
+http://host.docker.internal:8083
+```
+
+This prevents OpenHands from sending sandbox webhooks to the unrelated host service already using port `3000`.
+
 The OpenHands sandbox receives only the repo workspace folder:
 
 ```text
-/run/desktop/mnt/host/c/Users/mario/server/ai-coding-agent/workspace:/workspace:rw
+/run/desktop/mnt/host/c/Users/mario/server/ai-coding-agent/workspace:/workspace/project:rw
 ```
 
 This keeps OpenHands focused on active projects under `workspace/` and avoids mounting the full Windows drive.
+
+The sandbox uses a small local image built from `Dockerfile.openhands-agent`. It is based on the upstream OpenHands agent-server image, adds `/workspace/project` to git's system-level `safe.directory` list, and rewrites OpenHands' default sandbox webhook callback from host port `3000` to `8083` for this machine.
 
 ## Current Limitations
 
@@ -109,3 +121,4 @@ This keeps OpenHands focused on active projects under `workspace/` and avoids mo
 - `qwen2.5-coder:14b` was removed after a CUDA crash on this machine.
 - Open WebUI is useful for model switching and chat, but it does not replace code review.
 - OpenHands may still require a stronger local agentic coding model for reliable tool use.
+- OpenHands successfully starts against local Ollama, but `qwen2.5-coder:7b` and `llama3.1:8b` produced tool-call-looking text during a README creation smoke test instead of editing files.
