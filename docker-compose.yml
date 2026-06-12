@@ -16,6 +16,10 @@ services:
       - ./workspace:/home/coder/workspace
       - ./config/agent-rules.md:/home/coder/agent-rules.md:ro
     working_dir: /home/coder/workspace
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - socat TCP-LISTEN:11434,fork,reuseaddr TCP:host.docker.internal:11434 & exec /usr/bin/entrypoint.sh --bind-addr 0.0.0.0:8080 .
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main

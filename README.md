@@ -96,7 +96,13 @@ Open WebUI runs on port `8082` and connects to the same host Ollama service. Use
 
 ## Coding Agent Tools
 
-The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, and venv support.
+The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, venv support, Codex CLI, Bubblewrap sandbox support, and `socat` for local service forwarding.
+
+Inside code-server, Codex CLI can use the host Ollama service through a localhost forward:
+
+```bash
+codex --oss --local-provider ollama -m qwen2.5-coder:7b
+```
 
 Rebuild after changing the Dockerfile:
 
