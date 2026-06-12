@@ -45,7 +45,7 @@ function setBusy(busy) {
 }
 
 function renderJob(job) {
-  jobTitle.textContent = `${job.label} · ${job.project}`;
+  jobTitle.textContent = `${job.label} - ${job.project}`;
   jobStatus.textContent = job.status;
   output.textContent = job.output || 'Waiting for output...';
   output.scrollTop = output.scrollHeight;
@@ -78,7 +78,7 @@ async function runAction(action) {
   }
 
   const body = { action, project: projectSelect.value };
-  if (action === 'agent') body.prompt = promptInput.value;
+  if (action === 'agent' || action === 'local-suggest') body.prompt = promptInput.value;
   if (action === 'commit') body.message = commitMessage.value;
   const { job } = await api('/api/jobs', {
     method: 'POST',
@@ -125,3 +125,4 @@ showAuthed(session.authenticated);
 if (session.authenticated) {
   await loadProjects();
 }
+

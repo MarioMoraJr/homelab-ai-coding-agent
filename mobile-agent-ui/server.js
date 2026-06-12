@@ -9,6 +9,8 @@ const app = express();
 const port = Number(process.env.PORT || 8080);
 const workspaceRoot = path.resolve(process.env.WORKSPACE_ROOT || '/workspace');
 const password = process.env.MOBILE_AGENT_PASSWORD || '';
+const ollamaHost = process.env.OLLAMA_HOST || 'http://host.docker.internal:11434';
+const ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b';
 const cookieName = 'mobile_agent_session';
 const jobs = new Map();
 let activeJobId = null;
@@ -101,9 +103,62 @@ function commandFor(action, body) {
         args: ['push'],
         timeoutMs: 5 * 60 * 1000
       };
+    case 'local-suggest': {
+      const prompt = String(body.prompt || '').trim();
+      if (!prompt) throw new Error('Prompt is required');
+      return {
+        label: `Local Suggest (${ollamaModel})`,
+        type: 'local-suggest',
+        prompt,
+        timeoutMs: 5 * 60 * 1000
+      };
+    }
     default:
       throw new Error('Unknown action');
   }
+}
+
+async function collectProjectContext(cwd) {
+  const [status, files] = await Promise.all([
+    runBuffered('git', ['status', '--short', '--branch'], cwd).catch((error) => error.message),
+    runBuffered('find', ['.', '-maxdepth', '2', '-type', 'f'], cwd).catch((error) => error.message)
+  ]);
+
+  return [
+    'Git status:',
+    status.slice(0, 4000),
+    '',
+    'Files, depth 2:',
+    files.split('\n').filter((line) => !line.includes('/.git/')).slice(0, 120).join('\n')
+  ].join('\n');
+}
+
+function runBuffered(command, args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: jobEnv(),
+      shell: false
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', () => resolve(output));
+  });
+}
+
+function jobEnv() {
+  return {
+    ...process.env,
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'safe.directory',
+    GIT_CONFIG_VALUE_0: workspaceRoot
+  };
 }
 
 function append(job, chunk) {
@@ -133,14 +188,16 @@ function startJob({ project, cwd, action, spec }) {
   jobs.set(id, job);
   activeJobId = id;
 
+  if (spec.type === 'local-suggest') {
+    runLocalSuggest(job, cwd, spec).finally(() => {
+      activeJobId = null;
+    });
+    return job;
+  }
+
   const child = spawn(spec.command, spec.args, {
     cwd,
-    env: {
-      ...process.env,
-      GIT_CONFIG_COUNT: '1',
-      GIT_CONFIG_KEY_0: 'safe.directory',
-      GIT_CONFIG_VALUE_0: workspaceRoot
-    },
+    env: jobEnv(),
     shell: false
   });
 
@@ -163,6 +220,58 @@ function startJob({ project, cwd, action, spec }) {
   });
 
   return job;
+}
+
+async function runLocalSuggest(job, cwd, spec) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), spec.timeoutMs || 5 * 60 * 1000);
+
+  try {
+    append(job, `Using local model: ${ollamaModel}\n`);
+    append(job, 'No files will be changed by this action.\n\n');
+    const context = await collectProjectContext(cwd);
+    const prompt = [
+      'You are a local coding copilot. Do not claim to edit files or run commands.',
+      'Return a concise proposal the user can review.',
+      'If code changes are useful, include a unified diff in a fenced diff block.',
+      'If commands are useful, include them in a fenced shell block.',
+      'Do not invent files that are not present in the context unless you explicitly label them as new files.',
+      '',
+      `User request: ${spec.prompt}`,
+      '',
+      context
+    ].join('\n');
+
+    const response = await fetch(`${ollamaHost.replace(/\/$/, '')}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: ollamaModel,
+        prompt,
+        stream: false,
+        options: {
+          temperature: 0.2
+        }
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    append(job, data.response || 'Ollama returned no response.');
+    job.status = 'complete';
+    job.exitCode = 0;
+  } catch (error) {
+    append(job, `\nLocal suggestion failed: ${error.message}\n`);
+    job.status = 'failed';
+    job.exitCode = 1;
+  } finally {
+    clearTimeout(timer);
+    job.finishedAt = new Date().toISOString();
+  }
 }
 
 app.get('/api/session', (req, res) => {

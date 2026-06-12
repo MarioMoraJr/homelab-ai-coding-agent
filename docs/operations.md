@@ -249,6 +249,7 @@ Available actions:
 
 ```text
 Run Agent: gemini --prompt <request> --approval-mode yolo --skip-trust
+Local Suggest: Ollama suggestion only, no file writes or command execution
 Tests: npm test
 Status: git status --short --branch
 Diff: git --no-pager diff --stat --patch

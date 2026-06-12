@@ -98,12 +98,16 @@ services:
       - "127.0.0.1:8086:8080"
     environment:
       MOBILE_AGENT_PASSWORD: ${MOBILE_AGENT_PASSWORD:-${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}}
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-}
       GOOGLE_GENAI_USE_GCA: ${GOOGLE_GENAI_USE_GCA:-}
       TERM: xterm-256color
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./workspace:/workspace
       - gemini-cli-data:/home/node/.gemini
