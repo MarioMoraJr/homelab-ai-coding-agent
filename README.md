@@ -58,3 +58,13 @@ Open code-server:
 ```text
 http://localhost:8081
 ```
+
+## Remote Access
+
+The code-server container is reachable over Tailscale from trusted devices using the machine's Tailscale HTTPS address:
+
+```text
+https://<tailscale-machine-name-or-address>
+```
+
+Use the password from the local `.env` file. Do not commit `.env` or share the password publicly.
