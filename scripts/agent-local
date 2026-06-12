@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: agent-local \"your coding task\"" >&2
+    exit 2
+fi
+
+git config --global --add safe.directory /home/coder/workspace >/dev/null 2>&1 || true
+
+exec codex exec \
+    --oss \
+    --local-provider ollama \
+    -m "${OLLAMA_MODEL:-qwen2.5-coder:7b}" \
+    --sandbox workspace-write \
+    --skip-git-repo-check \
+    "$*"

@@ -104,6 +104,29 @@ Inside code-server, Codex CLI can use the host Ollama service through a localhos
 codex --oss --local-provider ollama -m qwen2.5-coder:7b
 ```
 
+Use the helper command for local agent runs:
+
+```bash
+cd /home/coder/workspace/<project-folder>
+agent-local "Inspect this project and suggest one small improvement."
+```
+
+Review changes before committing:
+
+```bash
+git diff
+git status
+```
+
+Commit only reviewed changes:
+
+```bash
+git add <files>
+git commit -m "Describe the change"
+```
+
+Current local-model note: Ollama-backed Codex CLI is useful for chat, inspection, and planning. Some small local models may produce tool-call-looking text instead of reliably editing files, so always check `git diff` and expect to manually apply or adjust small changes.
+
 Rebuild after changing the Dockerfile:
 
 ```cmd

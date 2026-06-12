@@ -18,6 +18,9 @@ RUN apt-get update \
 
 RUN npm install -g @openai/codex
 
+COPY scripts/agent-local /usr/local/bin/agent-local
+RUN chmod +x /usr/local/bin/agent-local
+
 USER coder
 
 ENV PATH="/home/coder/.local/bin:${PATH}"
