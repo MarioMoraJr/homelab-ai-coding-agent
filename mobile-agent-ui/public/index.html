@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mobile Agent</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main>
+      <section id="login-view" class="login-panel" hidden>
+        <h1>Mobile Agent</h1>
+        <p>Sign in with your local agent password.</p>
+        <form id="login-form">
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" required>
+          <button type="submit">Sign In</button>
+        </form>
+        <p id="login-error" class="error" role="alert"></p>
+      </section>
+
+      <section id="app-view" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Homelab</p>
+            <h1>Agent Console</h1>
+          </div>
+          <button id="logout" class="secondary" type="button">Sign Out</button>
+        </header>
+
+        <section class="controls">
+          <label for="project">Project</label>
+          <select id="project"></select>
+
+          <label for="prompt">Request</label>
+          <textarea id="prompt" rows="6" placeholder="Add a /version endpoint, run tests, and summarize the diff."></textarea>
+
+          <div class="button-grid">
+            <button data-action="agent" type="button">Run Agent</button>
+            <button data-action="test" type="button" class="secondary">Tests</button>
+            <button data-action="status" type="button" class="secondary">Status</button>
+            <button data-action="diff" type="button" class="secondary">Diff</button>
+          </div>
+
+          <div class="commit-row">
+            <input id="commit-message" type="text" placeholder="Commit message">
+            <button data-action="commit" type="button" class="secondary">Commit</button>
+          </div>
+        </section>
+
+        <section class="output-section">
+          <div class="output-head">
+            <div>
+              <p class="eyebrow">Live Output</p>
+              <h2 id="job-title">Idle</h2>
+            </div>
+            <span id="job-status">ready</span>
+          </div>
+          <pre id="output"></pre>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+.docker-ssh
+workspace
+node_modules
+**/node_modules
+logs
+tmp
+temp
+*.log

@@ -19,6 +19,7 @@ This project runs a private AI coding workspace on a Windows homelab machine usi
 | LiteLLM | `homelab_litellm` | `http://localhost:8084` | Optional OpenAI-compatible proxy for Ollama |
 | Ollama | Windows host process | `http://127.0.0.1:11434` | Local model runtime |
 | OpenHands | `homelab_openhands` | `http://localhost:8083` | Optional dedicated coding-agent runtime |
+| Mobile Agent UI | `homelab_mobile_agent_ui` | `http://localhost:8086` | Phone-friendly control panel for workspace agent tasks |
 
 Tailscale HTTPS access is handled outside this Compose stack. Use the machine's Tailscale HTTPS address from trusted devices.
 
@@ -102,6 +103,18 @@ agent-gemini --interactive
 ```
 
 In this mode, model inference is remote through Gemini CLI, while file reads, file writes, and shell commands run locally inside the code-server container against `/home/coder/workspace`. This keeps project execution and workspace boundaries local, but it is not fully offline.
+
+## Mobile Agent Flow
+
+The optional mobile UI runs as a separate service:
+
+```cmd
+docker compose --profile mobile up -d mobile-agent-ui
+```
+
+It mounts only `./workspace` at `/workspace` plus the shared `gemini-cli-data` volume at `/home/node/.gemini`. It is designed for phone workflows: choose a project, send a Gemini prompt, run tests, inspect status/diff, and commit reviewed work.
+
+The backend exposes a fixed set of actions instead of a general shell. This keeps the phone UI focused while preserving the workspace boundary.
 
 ## OpenHands Flow
 

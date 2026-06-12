@@ -85,6 +85,27 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - openhands-data:/.openhands
 
+  mobile-agent-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.mobile-agent-ui
+    image: homelab-mobile-agent-ui:latest
+    container_name: homelab_mobile_agent_ui
+    profiles:
+      - mobile
+    restart: unless-stopped
+    ports:
+      - "8086:8080"
+    environment:
+      MOBILE_AGENT_PASSWORD: ${MOBILE_AGENT_PASSWORD:-${CODE_SERVER_PASSWORD:?Set CODE_SERVER_PASSWORD in .env before starting}}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-}
+      GOOGLE_GENAI_USE_GCA: ${GOOGLE_GENAI_USE_GCA:-}
+    volumes:
+      - ./workspace:/workspace
+      - gemini-cli-data:/home/node/.gemini
+
 volumes:
   open-webui-data:
   openhands-data:

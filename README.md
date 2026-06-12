@@ -162,6 +162,24 @@ Stop OpenHands without stopping the stable base stack:
 docker compose --profile openhands stop openhands
 ```
 
+## Mobile Agent UI
+
+The mobile control panel is an optional phone-friendly UI for common agent tasks. It runs separately from code-server on port `8086`, mounts only `./workspace`, and uses the same persisted Gemini CLI auth volume.
+
+Start it:
+
+```cmd
+docker compose --profile mobile up -d mobile-agent-ui
+```
+
+Open it from a trusted device on your Tailnet:
+
+```text
+http://<tailscale-ip>:8086
+```
+
+Use the code-server password by default, or set `MOBILE_AGENT_PASSWORD` in `.env`. The UI can run Gemini agent prompts, tests, `git status`, `git diff`, and commits for projects under `workspace/`.
+
 ## Coding Agent Tools
 
 The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, venv support, Codex CLI, Gemini CLI, Bubblewrap sandbox support, `ripgrep`, `jq`, `tree`, build tools, and `socat` for local service forwarding.

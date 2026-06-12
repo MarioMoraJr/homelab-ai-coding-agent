@@ -216,6 +216,39 @@ Stop only OpenHands:
 docker compose --profile openhands stop openhands
 ```
 
+## Start Mobile Agent UI
+
+The mobile UI is optional and uses host port `8086`.
+
+```cmd
+docker compose --profile mobile up -d mobile-agent-ui
+```
+
+Open:
+
+```text
+http://localhost:8086
+```
+
+From your phone, use the Tailscale IP or Tailscale HTTPS route for this port. The UI uses `MOBILE_AGENT_PASSWORD` from `.env`; if that is not set, it falls back to `CODE_SERVER_PASSWORD`.
+
+The mobile UI mounts only:
+
+```text
+./workspace:/workspace
+gemini-cli-data:/home/node/.gemini
+```
+
+Available actions:
+
+```text
+Run Agent: gemini --prompt <request> --approval-mode yolo --skip-trust
+Tests: npm test
+Status: git status --short --branch
+Diff: git --no-pager diff --stat --patch
+Commit: git add -A && git commit -m <message>
+```
+
 Current smoke-test result:
 
 ```text
@@ -267,6 +300,7 @@ curl http://127.0.0.1:3100/status
 | `8082` | Open WebUI |
 | `8083` | OpenHands |
 | `8084` | LiteLLM |
+| `8086` | Mobile Agent UI |
 | `11434` | Ollama on Windows host |
 | `3100` | Express demo app |
 
