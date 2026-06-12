@@ -178,7 +178,7 @@ Open it from a trusted device on your Tailnet:
 http://<tailscale-ip>:8086
 ```
 
-Use the code-server password by default, or set `MOBILE_AGENT_PASSWORD` in `.env`. The UI can run Gemini agent prompts, tests, `git status`, `git diff`, and commits for projects under `workspace/`.
+Use the code-server password by default, or set `MOBILE_AGENT_PASSWORD` in `.env`. The UI can run Gemini agent prompts, tests, `git status`, `git diff`, commits, and confirmed `git push` commands for projects under `workspace/`.
 
 ## Coding Agent Tools
 

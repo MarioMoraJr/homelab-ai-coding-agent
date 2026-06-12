@@ -90,6 +90,13 @@ function commandFor(action, body) {
         args: ['-lc', 'git add -A && git commit -m "$1"', 'commit', message]
       };
     }
+    case 'push':
+      return {
+        label: 'Git Push',
+        command: 'git',
+        args: ['push'],
+        timeoutMs: 5 * 60 * 1000
+      };
     default:
       throw new Error('Unknown action');
   }

@@ -72,6 +72,11 @@ async function pollJob(id) {
 }
 
 async function runAction(action) {
+  if (action === 'push') {
+    const ok = window.confirm(`Push commits from ${projectSelect.value} to its configured Git remote?`);
+    if (!ok) return;
+  }
+
   const body = { action, project: projectSelect.value };
   if (action === 'agent') body.prompt = promptInput.value;
   if (action === 'commit') body.message = commitMessage.value;

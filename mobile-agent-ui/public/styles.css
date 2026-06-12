@@ -132,6 +132,16 @@ button.secondary {
   border: 1px solid var(--line);
 }
 
+button.danger {
+  background: #fff1f0;
+  color: var(--danger);
+  border: 1px solid #f4b8b3;
+}
+
+button.danger:active {
+  background: #ffd8d5;
+}
+
 .button-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

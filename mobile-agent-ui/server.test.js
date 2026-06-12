@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import test from 'node:test';
 
-test('authenticates and lists workspace projects', async (t) => {
+const execFileAsync = promisify(execFile);
+
+test('authenticates, lists projects, and starts a guarded push job', async (t) => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'mobile-agent-ui-'));
   await fs.mkdir(path.join(workspace, 'sample-app'));
   await fs.writeFile(path.join(workspace, 'sample-app', 'package.json'), '{"scripts":{}}\n');
+  await execFileAsync('git', ['init'], { cwd: path.join(workspace, 'sample-app') });
 
   process.env.MOBILE_AGENT_PASSWORD = 'test-password';
   process.env.WORKSPACE_ROOT = workspace;
@@ -38,6 +43,26 @@ test('authenticates and lists workspace projects', async (t) => {
   assert.equal(projects.status, 200);
   const body = await projects.json();
   assert.deepEqual(body.projects, [
-    { name: 'sample-app', git: false, packageJson: true }
+    { name: 'sample-app', git: true, packageJson: true }
   ]);
+
+  const push = await fetch(`${base}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ project: 'sample-app', action: 'push' })
+  });
+  assert.equal(push.status, 202);
+  const pushBody = await push.json();
+  assert.equal(pushBody.job.label, 'Git Push');
+
+  let job;
+  for (let i = 0; i < 20; i += 1) {
+    const response = await fetch(`${base}/api/jobs/${pushBody.job.id}`, { headers: { cookie } });
+    assert.equal(response.status, 200);
+    ({ job } = await response.json());
+    if (job.status !== 'running') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(job.status, 'failed');
+  assert.match(job.output, /No configured push destination|no upstream branch|fatal:/i);
 });
