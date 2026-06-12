@@ -38,6 +38,7 @@ docker ps --filter "name=homelab_"
 ```cmd
 docker logs homelab_code_server
 docker logs homelab_open_webui
+docker logs homelab_openhands
 ```
 
 ## Check Ollama on Windows
@@ -70,6 +71,40 @@ Use a different local model:
 
 ```bash
 agent-local --model llama3.1:8b "Inspect this project and suggest one small improvement."
+```
+
+## Start OpenHands
+
+OpenHands is optional and uses host port `8083`.
+
+```cmd
+docker compose --profile openhands up -d openhands
+```
+
+Open:
+
+```text
+http://localhost:8083
+```
+
+Use these advanced LLM settings if prompted:
+
+```text
+Custom Model: openai/qwen2.5-coder:7b
+Base URL: http://host.docker.internal:11434/v1
+API Key: local-llm
+```
+
+Check OpenHands can reach Ollama:
+
+```cmd
+docker exec homelab_openhands curl -fsS http://host.docker.internal:11434/v1/models
+```
+
+Stop only OpenHands:
+
+```cmd
+docker compose --profile openhands stop openhands
 ```
 
 Review changes:
@@ -107,6 +142,7 @@ curl http://127.0.0.1:3100/status
 | --- | --- |
 | `8081` | code-server |
 | `8082` | Open WebUI |
+| `8083` | OpenHands |
 | `11434` | Ollama on Windows host |
 | `3100` | Express demo app |
 

@@ -11,6 +11,7 @@ Build a private Codex-style coding environment that can run on my own laptop/ser
 - Docker
 - code-server
 - Open WebUI
+- OpenHands
 - GitHub CLI
 - Tailscale
 - Local workspaces
@@ -98,6 +99,38 @@ OLLAMA_MODEL=qwen2.5-coder:7b
 The code-server container receives both `OLLAMA_HOST` and `OLLAMA_MODEL` as environment variables so agent tools can use the local model service.
 
 Open WebUI runs on port `8082` and connects to the same host Ollama service. Use it to chat with installed models and switch between available Ollama models from the browser.
+
+## OpenHands
+
+OpenHands is included as an optional agent runtime for testing local model file-editing behavior. It is behind a Compose profile so the stable code-server and Open WebUI stack still starts with the normal command.
+
+Start OpenHands:
+
+```cmd
+docker compose --profile openhands up -d openhands
+```
+
+Open it at:
+
+```text
+http://localhost:8083
+```
+
+The default local model settings are:
+
+```text
+Custom Model: openai/qwen2.5-coder:7b
+Base URL: http://host.docker.internal:11434/v1
+API Key: local-llm
+```
+
+If the UI prompts for setup, open the advanced LLM settings and use those values. The OpenHands sandbox mounts only this repo's `workspace/` folder at `/workspace`.
+
+Stop OpenHands without stopping the stable base stack:
+
+```cmd
+docker compose --profile openhands stop openhands
+```
 
 ## Coding Agent Tools
 

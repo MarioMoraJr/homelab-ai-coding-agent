@@ -17,6 +17,7 @@ This project runs a private AI coding workspace on a Windows homelab machine usi
 | code-server | `homelab_code_server` | `http://localhost:8081` | Browser-based coding workspace |
 | Open WebUI | `homelab_open_webui` | `http://localhost:8082` | Browser chat UI for Ollama models |
 | Ollama | Windows host process | `http://127.0.0.1:11434` | Local model runtime |
+| OpenHands | `homelab_openhands` | `http://localhost:8083` | Optional dedicated coding-agent runtime |
 
 Tailscale HTTPS access is handled outside this Compose stack. Use the machine's Tailscale HTTPS address from trusted devices.
 
@@ -79,9 +80,32 @@ codex exec --oss --local-provider ollama -m qwen2.5-coder:7b --sandbox workspace
 
 Always review `git diff` before committing.
 
+## OpenHands Flow
+
+OpenHands runs only when the `openhands` Compose profile is enabled:
+
+```cmd
+docker compose --profile openhands up -d openhands
+```
+
+The web app listens on host port `8083` because port `3000` is already used by another homelab service. It talks to the Windows-host Ollama server through the OpenAI-compatible endpoint:
+
+```text
+http://host.docker.internal:11434/v1
+```
+
+The OpenHands sandbox receives only the repo workspace folder:
+
+```text
+/run/desktop/mnt/host/c/Users/mario/server/ai-coding-agent/workspace:/workspace:rw
+```
+
+This keeps OpenHands focused on active projects under `workspace/` and avoids mounting the full Windows drive.
+
 ## Current Limitations
 
 - `qwen2.5-coder:7b` is stable on this machine and good for coding discussion.
 - Smaller local models may produce plans or tool-call-looking text instead of reliably applying edits.
 - `qwen2.5-coder:14b` was removed after a CUDA crash on this machine.
 - Open WebUI is useful for model switching and chat, but it does not replace code review.
+- OpenHands may still require a stronger local agentic coding model for reliable tool use.

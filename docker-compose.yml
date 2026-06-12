@@ -32,5 +32,29 @@ services:
     volumes:
       - open-webui-data:/app/backend/data
 
+  openhands:
+    image: docker.openhands.dev/openhands/openhands:1.8
+    container_name: homelab_openhands
+    profiles:
+      - openhands
+    restart: unless-stopped
+    ports:
+      - "8083:3000"
+    environment:
+      AGENT_SERVER_IMAGE_REPOSITORY: ghcr.io/openhands/agent-server
+      AGENT_SERVER_IMAGE_TAG: 1.26.0-python
+      LOG_ALL_EVENTS: "true"
+      OH_PERSISTENCE_DIR: /.openhands
+      LLM_API_KEY: ${OPENHANDS_LLM_API_KEY:-local-llm}
+      LLM_MODEL: ${OPENHANDS_LLM_MODEL:-openai/qwen2.5-coder:7b}
+      LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      SANDBOX_VOLUMES: ${OPENHANDS_SANDBOX_VOLUMES:-/run/desktop/mnt/host/c/Users/mario/server/ai-coding-agent/workspace:/workspace:rw}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openhands-data:/.openhands
+
 volumes:
   open-webui-data:
+  openhands-data:
