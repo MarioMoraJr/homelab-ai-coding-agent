@@ -105,8 +105,8 @@ function commandFor(action, body) {
       if (!message) throw new Error('Commit message is required');
       return {
         label: 'Commit',
-        command: 'sh',
-        args: ['-lc', 'git add -A -- . ":(exclude)node_modules/**" && git commit -m "$1"', 'commit', message]
+        type: 'git-commit',
+        message
       };
     }
     case 'push':
@@ -279,6 +279,13 @@ function startJob({ project, cwd, action, spec }) {
 
   if (spec.type === 'git-push') {
     runGitPush(job, cwd).finally(() => {
+      activeJobId = null;
+    });
+    return job;
+  }
+
+  if (spec.type === 'git-commit') {
+    runGitCommit(job, cwd, spec.message).finally(() => {
       activeJobId = null;
     });
     return job;
@@ -464,6 +471,30 @@ async function runGitPush(job, cwd) {
     job.exitCode = 0;
   } catch (error) {
     append(job, `Git push failed.\n${error.message}\n`);
+    job.status = 'failed';
+    job.exitCode = 1;
+  } finally {
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
+async function runGitCommit(job, cwd, message) {
+  try {
+    await trustProjectPath(cwd);
+    const addOutput = await runBuffered(
+      'git',
+      ['add', '-A', '--', '.'],
+      cwd,
+      { rejectOnFailure: true }
+    );
+    if (addOutput.trim()) append(job, addOutput);
+
+    const output = await runBuffered('git', ['commit', '-m', message], cwd, { rejectOnFailure: true });
+    append(job, output || 'Commit completed.\n');
+    job.status = 'complete';
+    job.exitCode = 0;
+  } catch (error) {
+    append(job, `Commit failed.\n${error.message}\n`);
     job.status = 'failed';
     job.exitCode = 1;
   } finally {

@@ -12,11 +12,16 @@ const execFileAsync = promisify(execFile);
 test('authenticates, lists projects, and starts a guarded push job', async (t) => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'mobile-agent-ui-'));
   await fs.mkdir(path.join(workspace, 'sample-app'));
+  await fs.mkdir(path.join(workspace, 'sample-app', 'node_modules'));
   await fs.writeFile(path.join(workspace, 'sample-app', 'package.json'), '{"scripts":{}}\n');
   await fs.writeFile(path.join(workspace, 'sample-app', 'README.md'), 'hello\n');
+  await fs.writeFile(path.join(workspace, 'sample-app', 'node_modules', 'ignored.txt'), 'ignored\n');
   await execFileAsync('git', ['init'], { cwd: path.join(workspace, 'sample-app') });
-  await execFileAsync('git', ['add', 'README.md', 'package.json'], { cwd: path.join(workspace, 'sample-app') });
+  await fs.writeFile(path.join(workspace, 'sample-app', '.gitignore'), 'node_modules/\n.env\n');
+  await execFileAsync('git', ['add', 'README.md', 'package.json', '.gitignore'], { cwd: path.join(workspace, 'sample-app') });
   await execFileAsync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Initial'], { cwd: path.join(workspace, 'sample-app') });
+  await execFileAsync('git', ['config', 'user.name', 'Test'], { cwd: path.join(workspace, 'sample-app') });
+  await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: path.join(workspace, 'sample-app') });
 
   process.env.MOBILE_AGENT_PASSWORD = 'test-password';
   process.env.WORKSPACE_ROOT = workspace;
@@ -149,4 +154,26 @@ test('authenticates, lists projects, and starts a guarded push job', async (t) =
   assert.match(applyJob.output, /Patch applied successfully/);
   const readme = await fs.readFile(path.join(workspace, 'sample-app', 'README.md'), 'utf8');
   assert.equal(readme.replace(/\r\n/g, '\n'), 'hello local copilot\n');
+
+  const commit = await fetch(`${base}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ project: 'sample-app', action: 'commit', message: 'Apply local patch' })
+  });
+  assert.equal(commit.status, 202);
+  const commitBody = await commit.json();
+  assert.equal(commitBody.job.label, 'Commit');
+
+  let commitJob;
+  for (let i = 0; i < 20; i += 1) {
+    const response = await fetch(`${base}/api/jobs/${commitBody.job.id}`, { headers: { cookie } });
+    assert.equal(response.status, 200);
+    ({ job: commitJob } = await response.json());
+    if (commitJob.status !== 'running') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(commitJob.status, 'complete', commitJob.output);
+  assert.doesNotMatch(commitJob.output, /node_modules/);
+  const trackedFiles = await execFileAsync('git', ['ls-files'], { cwd: path.join(workspace, 'sample-app') });
+  assert.doesNotMatch(trackedFiles.stdout, /node_modules/);
 });
