@@ -440,11 +440,24 @@ async function applyPatchFile(job, cwd, patchPath) {
     append(job, `Strict git apply failed; trying fuzzy patch fallback.\n${gitError.message}\n`);
   }
 
-  const dryRun = await runBuffered('patch', ['--dry-run', '--batch', '--forward', '--fuzz=3', '-p1', '-i', patchPath], cwd, { rejectOnFailure: true });
-  if (dryRun.trim()) append(job, `${dryRun.trimEnd()}\n`);
-  const output = await runBuffered('patch', ['--batch', '--forward', '--fuzz=3', '-p1', '-i', patchPath], cwd, { rejectOnFailure: true });
+  const fallback = await findPatchFallback(cwd, patchPath);
+  if (fallback.dryRun.trim()) append(job, `${fallback.dryRun.trimEnd()}\n`);
+  const output = await runBuffered('patch', ['--batch', '--forward', '--fuzz=3', fallback.strip, '-i', patchPath], cwd, { rejectOnFailure: true });
   if (output.trim()) append(job, `${output.trimEnd()}\n`);
   await runBuffered('find', ['.', '-name', '*.orig', '-delete'], cwd).catch(() => {});
+}
+
+async function findPatchFallback(cwd, patchPath) {
+  const errors = [];
+  for (const strip of ['-p1', '-p0']) {
+    try {
+      const dryRun = await runBuffered('patch', ['--dry-run', '--batch', '--forward', '--fuzz=3', strip, '-i', patchPath], cwd, { rejectOnFailure: true });
+      return { strip, dryRun };
+    } catch (error) {
+      errors.push(`${strip}: ${error.message}`);
+    }
+  }
+  throw new Error(errors.join('\n'));
 }
 
 async function validateProjectAfterPatch(job, cwd) {

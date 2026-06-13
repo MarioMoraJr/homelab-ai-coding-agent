@@ -177,3 +177,81 @@ test('authenticates, lists projects, and starts a guarded push job', async (t) =
   const trackedFiles = await execFileAsync('git', ['ls-files'], { cwd: path.join(workspace, 'sample-app') });
   assert.doesNotMatch(trackedFiles.stdout, /node_modules/);
 });
+
+test('applies plain unified diffs with unprefixed paths', async (t) => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'mobile-agent-ui-plain-diff-'));
+  const projectPath = path.join(workspace, 'sample-app');
+  await fs.mkdir(projectPath);
+  await fs.writeFile(path.join(projectPath, 'package.json'), '{"scripts":{}}\n');
+  await fs.writeFile(path.join(projectPath, 'README.md'), 'hello\n');
+  await execFileAsync('git', ['init'], { cwd: projectPath });
+  await execFileAsync('git', ['config', 'user.name', 'Test'], { cwd: projectPath });
+  await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: projectPath });
+  await execFileAsync('git', ['add', 'README.md', 'package.json'], { cwd: projectPath });
+  await execFileAsync('git', ['commit', '-m', 'Initial'], { cwd: projectPath });
+
+  process.env.MOBILE_AGENT_PASSWORD = 'test-password';
+  process.env.WORKSPACE_ROOT = workspace;
+
+  const ollama = http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      response: [
+        '```diff',
+        '--- README.md',
+        '+++ README.md',
+        '@@ -1 +1 @@',
+        '-hello',
+        '+hello from p0',
+        '```'
+      ].join('\n')
+    }));
+  });
+  await new Promise((resolve) => ollama.listen(0, resolve));
+  t.after(() => ollama.close());
+  process.env.OLLAMA_HOST = `http://127.0.0.1:${ollama.address().port}`;
+
+  const { app } = await import(`./server.js?plain-diff=${Date.now()}`);
+  const server = app.listen(0);
+  t.after(() => server.close());
+  t.after(() => fs.rm(workspace, { recursive: true, force: true }));
+
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const login = await fetch(`${base}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'test-password' })
+  });
+  const cookie = login.headers.get('set-cookie');
+
+  const suggest = await fetch(`${base}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ project: 'sample-app', action: 'local-suggest', prompt: 'change readme' })
+  });
+  const suggestBody = await suggest.json();
+  for (let i = 0; i < 20; i += 1) {
+    const response = await fetch(`${base}/api/jobs/${suggestBody.job.id}`, { headers: { cookie } });
+    const { job } = await response.json();
+    if (job.status !== 'running') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  const apply = await fetch(`${base}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ project: 'sample-app', action: 'apply-patch' })
+  });
+  const applyBody = await apply.json();
+  let applyJob;
+  for (let i = 0; i < 20; i += 1) {
+    const response = await fetch(`${base}/api/jobs/${applyBody.job.id}`, { headers: { cookie } });
+    ({ job: applyJob } = await response.json());
+    if (applyJob.status !== 'running') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  assert.equal(applyJob.status, 'complete', applyJob.output);
+  const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8');
+  assert.equal(readme.replace(/\r\n/g, '\n'), 'hello from p0\n');
+});
