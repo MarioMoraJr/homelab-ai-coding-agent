@@ -399,9 +399,7 @@ async function runApplyPatch(job, cwd, project) {
   try {
     await trustProjectPath(cwd);
     await fs.writeFile(patchPath, suggestion.patch, 'utf8');
-    const check = await runBuffered('git', ['apply', '--check', '--recount', patchPath], cwd, { rejectOnFailure: true });
-    if (check.trim()) append(job, check);
-    await runBuffered('git', ['apply', '--recount', patchPath], cwd, { rejectOnFailure: true });
+    await applyPatchFile(job, cwd, patchPath);
     append(job, 'Patch applied successfully.\nRun Tests and Diff next before committing.\n');
     suggestions.delete(project);
     job.status = 'complete';
@@ -415,6 +413,22 @@ async function runApplyPatch(job, cwd, project) {
     await fs.rm(patchPath, { force: true }).catch(() => {});
     job.finishedAt = new Date().toISOString();
   }
+}
+
+async function applyPatchFile(job, cwd, patchPath) {
+  try {
+    const check = await runBuffered('git', ['apply', '--check', '--recount', patchPath], cwd, { rejectOnFailure: true });
+    if (check.trim()) append(job, check);
+    await runBuffered('git', ['apply', '--recount', patchPath], cwd, { rejectOnFailure: true });
+    return;
+  } catch (gitError) {
+    append(job, `Strict git apply failed; trying fuzzy patch fallback.\n${gitError.message}\n`);
+  }
+
+  const dryRun = await runBuffered('patch', ['--dry-run', '--batch', '--forward', '--fuzz=3', '-p1', '-i', patchPath], cwd, { rejectOnFailure: true });
+  if (dryRun.trim()) append(job, `${dryRun.trimEnd()}\n`);
+  const output = await runBuffered('patch', ['--batch', '--forward', '--fuzz=3', '-p1', '-i', patchPath], cwd, { rejectOnFailure: true });
+  if (output.trim()) append(job, `${output.trimEnd()}\n`);
 }
 
 async function runGitDiff(job, cwd) {
