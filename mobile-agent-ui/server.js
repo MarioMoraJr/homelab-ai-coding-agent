@@ -108,8 +108,7 @@ function commandFor(action, body) {
     case 'push':
       return {
         label: 'Git Push',
-        command: 'git',
-        args: ['push'],
+        type: 'git-push',
         timeoutMs: 5 * 60 * 1000
       };
     case 'local-suggest': {
@@ -264,6 +263,13 @@ function startJob({ project, cwd, action, spec }) {
     return job;
   }
 
+  if (spec.type === 'git-push') {
+    runGitPush(job, cwd).finally(() => {
+      activeJobId = null;
+    });
+    return job;
+  }
+
   const child = spawn(spec.command, spec.args, {
     cwd,
     env: jobEnv(),
@@ -408,6 +414,37 @@ async function runGitDiff(job, cwd) {
     job.exitCode = 0;
   } catch (error) {
     append(job, `Git diff failed: ${error.message}\n`);
+    job.status = 'failed';
+    job.exitCode = 1;
+  } finally {
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
+async function runGitPush(job, cwd) {
+  try {
+    const remotes = await runBuffered('git', ['remote'], cwd, { rejectOnFailure: true });
+    if (!remotes.trim()) {
+      append(job, [
+        'No Git remote is configured for this project.',
+        '',
+        'Create a GitHub repository, then add it from code-server or a terminal:',
+        'git remote add origin <github-repo-url>',
+        'git push -u origin main',
+        '',
+        'After that, the Git Push button can push future commits.'
+      ].join('\n') + '\n');
+      job.status = 'failed';
+      job.exitCode = 1;
+      return;
+    }
+
+    const output = await runBuffered('git', ['push'], cwd, { rejectOnFailure: true });
+    append(job, output || 'Push completed.\n');
+    job.status = 'complete';
+    job.exitCode = 0;
+  } catch (error) {
+    append(job, `Git push failed.\n${error.message}\n`);
     job.status = 'failed';
     job.exitCode = 1;
   } finally {

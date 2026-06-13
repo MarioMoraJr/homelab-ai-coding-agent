@@ -99,7 +99,8 @@ test('authenticates, lists projects, and starts a guarded push job', async (t) =
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   assert.equal(job.status, 'failed');
-  assert.match(job.output, /No configured push destination|no upstream branch|fatal:/i);
+  assert.match(job.output, /No Git remote is configured/);
+  assert.match(job.output, /git remote add origin <github-repo-url>/);
 
   const suggest = await fetch(`${base}/api/jobs`, {
     method: 'POST',

@@ -255,7 +255,7 @@ Tests: npm test
 Status: git status --short --branch
 Diff: git --no-pager diff --stat --patch
 Commit: git add -A && git commit -m <message>
-Git Push: git push, after a browser confirmation prompt
+Git Push: checks for a configured Git remote, then runs git push after a browser confirmation prompt
 ```
 
 Current smoke-test result:
