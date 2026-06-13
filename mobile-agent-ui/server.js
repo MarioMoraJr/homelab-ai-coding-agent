@@ -407,7 +407,8 @@ async function runApplyPatch(job, cwd, project) {
     job.status = 'complete';
     job.exitCode = 0;
   } catch (error) {
-    append(job, `Patch was not applied.\n${error.message}\n`);
+    suggestions.delete(project);
+    append(job, `Patch was not applied.\n${error.message}\n\nRun Local Suggest again so the next patch is based on the current files.\n`);
     job.status = 'failed';
     job.exitCode = 1;
   } finally {
