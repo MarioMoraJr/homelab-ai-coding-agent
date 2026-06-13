@@ -72,6 +72,11 @@ async function pollJob(id) {
 }
 
 async function runAction(action) {
+  if (action === 'apply-patch') {
+    const ok = window.confirm(`Apply the latest Local Suggest patch to ${projectSelect.value}?`);
+    if (!ok) return;
+  }
+
   if (action === 'push') {
     const ok = window.confirm(`Push commits from ${projectSelect.value} to its configured Git remote?`);
     if (!ok) return;

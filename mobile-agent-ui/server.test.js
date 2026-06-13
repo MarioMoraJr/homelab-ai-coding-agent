@@ -13,7 +13,10 @@ test('authenticates, lists projects, and starts a guarded push job', async (t) =
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'mobile-agent-ui-'));
   await fs.mkdir(path.join(workspace, 'sample-app'));
   await fs.writeFile(path.join(workspace, 'sample-app', 'package.json'), '{"scripts":{}}\n');
+  await fs.writeFile(path.join(workspace, 'sample-app', 'README.md'), 'hello\n');
   await execFileAsync('git', ['init'], { cwd: path.join(workspace, 'sample-app') });
+  await execFileAsync('git', ['add', 'README.md', 'package.json'], { cwd: path.join(workspace, 'sample-app') });
+  await execFileAsync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Initial'], { cwd: path.join(workspace, 'sample-app') });
 
   process.env.MOBILE_AGENT_PASSWORD = 'test-password';
   process.env.WORKSPACE_ROOT = workspace;
@@ -30,7 +33,21 @@ test('authenticates, lists projects, and starts a guarded push job', async (t) =
       assert.equal(request.model, 'qwen2.5-coder:7b');
       assert.match(request.prompt, /User request: Suggest a tiny safe improvement/);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ response: 'Suggested local-only improvement.' }));
+      res.end(JSON.stringify({
+        response: [
+          'Suggested local-only improvement.',
+          '',
+          '```diff',
+          'diff --git a/README.md b/README.md',
+          'index ce01362..94954ab 100644',
+          '--- a/README.md',
+          '+++ b/README.md',
+          '@@ -1 +1 @@',
+          '-hello',
+          '+hello local copilot',
+          '```'
+        ].join('\n')
+      }));
     });
   });
   await new Promise((resolve) => ollama.listen(0, resolve));
@@ -110,4 +127,27 @@ test('authenticates, lists projects, and starts a guarded push job', async (t) =
   assert.equal(suggestionJob.status, 'complete');
   assert.match(suggestionJob.output, /No files will be changed/);
   assert.match(suggestionJob.output, /Suggested local-only improvement/);
+  assert.match(suggestionJob.output, /Patch detected/);
+
+  const apply = await fetch(`${base}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', cookie },
+    body: JSON.stringify({ project: 'sample-app', action: 'apply-patch' })
+  });
+  assert.equal(apply.status, 202);
+  const applyBody = await apply.json();
+  assert.equal(applyBody.job.label, 'Apply Patch');
+
+  let applyJob;
+  for (let i = 0; i < 20; i += 1) {
+    const response = await fetch(`${base}/api/jobs/${applyBody.job.id}`, { headers: { cookie } });
+    assert.equal(response.status, 200);
+    ({ job: applyJob } = await response.json());
+    if (applyJob.status !== 'running') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(applyJob.status, 'complete');
+  assert.match(applyJob.output, /Patch applied successfully/);
+  const readme = await fs.readFile(path.join(workspace, 'sample-app', 'README.md'), 'utf8');
+  assert.equal(readme.replace(/\r\n/g, '\n'), 'hello local copilot\n');
 });

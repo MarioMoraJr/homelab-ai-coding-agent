@@ -13,6 +13,7 @@ const ollamaHost = process.env.OLLAMA_HOST || 'http://host.docker.internal:11434
 const ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b';
 const cookieName = 'mobile_agent_session';
 const jobs = new Map();
+const suggestions = new Map();
 let activeJobId = null;
 
 app.use(express.json({ limit: '64kb' }));
@@ -121,9 +122,23 @@ function commandFor(action, body) {
         timeoutMs: 5 * 60 * 1000
       };
     }
+    case 'apply-patch':
+      return {
+        label: 'Apply Patch',
+        type: 'apply-patch',
+        timeoutMs: 2 * 60 * 1000
+      };
     default:
       throw new Error('Unknown action');
   }
+}
+
+function extractDiffBlock(text) {
+  const fenced = text.match(/```(?:diff|patch)\s*\n([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.search(/^diff --git /m);
+  if (start === -1) return null;
+  return candidate.slice(start).trimEnd() + '\n';
 }
 
 async function collectProjectContext(cwd) {
@@ -141,7 +156,7 @@ async function collectProjectContext(cwd) {
   ].join('\n');
 }
 
-function runBuffered(command, args, cwd) {
+function runBuffered(command, args, cwd, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -156,7 +171,13 @@ function runBuffered(command, args, cwd) {
       output += chunk.toString();
     });
     child.on('error', reject);
-    child.on('close', () => resolve(output));
+    child.on('close', (code) => {
+      if (options.rejectOnFailure && code !== 0) {
+        reject(new Error(output || `${command} exited with code ${code}`));
+        return;
+      }
+      resolve(output);
+    });
   });
 }
 
@@ -205,6 +226,13 @@ function startJob({ project, cwd, action, spec }) {
 
   if (spec.type === 'git-diff') {
     runGitDiff(job, cwd).finally(() => {
+      activeJobId = null;
+    });
+    return job;
+  }
+
+  if (spec.type === 'apply-patch') {
+    runApplyPatch(job, cwd, project).finally(() => {
       activeJobId = null;
     });
     return job;
@@ -276,7 +304,19 @@ async function runLocalSuggest(job, cwd, spec) {
     }
 
     const data = await response.json();
-    append(job, data.response || 'Ollama returned no response.');
+    const suggestion = data.response || 'Ollama returned no response.';
+    append(job, suggestion);
+    const patch = extractDiffBlock(suggestion);
+    suggestions.set(job.project, {
+      output: suggestion,
+      patch,
+      createdAt: new Date().toISOString()
+    });
+    if (patch) {
+      append(job, '\n\nPatch detected. Review it, then use Apply Patch if it looks good.');
+    } else {
+      append(job, '\n\nNo applicable diff block detected.');
+    }
     job.status = 'complete';
     job.exitCode = 0;
   } catch (error) {
@@ -285,6 +325,36 @@ async function runLocalSuggest(job, cwd, spec) {
     job.exitCode = 1;
   } finally {
     clearTimeout(timer);
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
+async function runApplyPatch(job, cwd, project) {
+  const suggestion = suggestions.get(project);
+  if (!suggestion?.patch) {
+    append(job, 'No applicable patch found for this project. Run Local Suggest and ask for a unified diff first.\n');
+    job.status = 'failed';
+    job.exitCode = 1;
+    job.finishedAt = new Date().toISOString();
+    return;
+  }
+
+  const patchPath = path.join(cwd, `.mobile-agent-${job.id}.patch`);
+  try {
+    await fs.writeFile(patchPath, suggestion.patch, 'utf8');
+    const check = await runBuffered('git', ['apply', '--check', patchPath], cwd, { rejectOnFailure: true });
+    if (check.trim()) append(job, check);
+    await runBuffered('git', ['apply', patchPath], cwd, { rejectOnFailure: true });
+    append(job, 'Patch applied successfully.\nRun Tests and Diff next before committing.\n');
+    suggestions.delete(project);
+    job.status = 'complete';
+    job.exitCode = 0;
+  } catch (error) {
+    append(job, `Patch was not applied.\n${error.message}\n`);
+    job.status = 'failed';
+    job.exitCode = 1;
+  } finally {
+    await fs.rm(patchPath, { force: true }).catch(() => {});
     job.finishedAt = new Date().toISOString();
   }
 }

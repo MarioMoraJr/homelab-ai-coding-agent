@@ -250,6 +250,7 @@ Available actions:
 ```text
 Run Agent: gemini --prompt <request> --approval-mode yolo --skip-trust
 Local Suggest: Ollama suggestion only, no file writes or command execution
+Apply Patch: extracts the latest Local Suggest diff, runs git apply --check, then applies only if valid
 Tests: npm test
 Status: git status --short --branch
 Diff: git --no-pager diff --stat --patch
