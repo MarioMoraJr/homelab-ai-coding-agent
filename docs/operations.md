@@ -90,6 +90,8 @@ gh repo create express-health --private --source=. --remote=origin --push
 
 If the initial commit already exists, skip the `git commit` line. After the first push, the mobile Git Push button can push future commits.
 
+GitHub CLI auth is persisted in the `github-cli-data` Docker volume and shared with the mobile agent UI so confirmed mobile pushes can use the same GitHub login.
+
 ## Use the hybrid Gemini CLI helper
 
 Gemini CLI is an optional hybrid path: the model is remote, but file edits and shell commands execute locally inside the code-server container and the mounted workspace.

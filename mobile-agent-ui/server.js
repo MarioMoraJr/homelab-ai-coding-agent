@@ -66,6 +66,10 @@ async function getProjectPath(project) {
   return resolved;
 }
 
+async function trustProjectPath(cwd) {
+  await runBuffered('git', ['config', '--global', '--add', 'safe.directory', cwd], cwd).catch(() => {});
+}
+
 function commandFor(action, body) {
   switch (action) {
     case 'agent': {
@@ -185,7 +189,7 @@ function runBuffered(command, args, cwd, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env: jobEnv(),
+      env: jobEnv(cwd),
       shell: false
     });
     let output = '';
@@ -206,13 +210,21 @@ function runBuffered(command, args, cwd, options = {}) {
   });
 }
 
-function jobEnv() {
-  return {
+function jobEnv(extraSafeDirectory) {
+  const env = {
     ...process.env,
     GIT_CONFIG_COUNT: '1',
     GIT_CONFIG_KEY_0: 'safe.directory',
     GIT_CONFIG_VALUE_0: workspaceRoot
   };
+
+  if (extraSafeDirectory && extraSafeDirectory !== workspaceRoot) {
+    env.GIT_CONFIG_COUNT = '2';
+    env.GIT_CONFIG_KEY_1 = 'safe.directory';
+    env.GIT_CONFIG_VALUE_1 = extraSafeDirectory;
+  }
+
+  return env;
 }
 
 function append(job, chunk) {
@@ -241,6 +253,8 @@ function startJob({ project, cwd, action, spec }) {
   };
   jobs.set(id, job);
   activeJobId = id;
+
+  trustProjectPath(cwd).catch(() => {});
 
   if (spec.type === 'local-suggest') {
     runLocalSuggest(job, cwd, spec).finally(() => {
@@ -272,7 +286,7 @@ function startJob({ project, cwd, action, spec }) {
 
   const child = spawn(spec.command, spec.args, {
     cwd,
-    env: jobEnv(),
+    env: jobEnv(cwd),
     shell: false
   });
 
@@ -302,6 +316,7 @@ async function runLocalSuggest(job, cwd, spec) {
   const timer = setTimeout(() => controller.abort(), spec.timeoutMs || 5 * 60 * 1000);
 
   try {
+    await trustProjectPath(cwd);
     append(job, `Using local model: ${ollamaModel}\n`);
     append(job, 'No files will be changed by this action.\n\n');
     const context = await collectProjectContext(cwd);
@@ -375,6 +390,7 @@ async function runApplyPatch(job, cwd, project) {
 
   const patchPath = path.join(cwd, `.mobile-agent-${job.id}.patch`);
   try {
+    await trustProjectPath(cwd);
     await fs.writeFile(patchPath, suggestion.patch, 'utf8');
     const check = await runBuffered('git', ['apply', '--check', '--recount', patchPath], cwd, { rejectOnFailure: true });
     if (check.trim()) append(job, check);
@@ -395,6 +411,7 @@ async function runApplyPatch(job, cwd, project) {
 
 async function runGitDiff(job, cwd) {
   try {
+    await trustProjectPath(cwd);
     const diff = await runBuffered('git', ['--no-pager', 'diff', '--stat', '--patch', '--', '.', ':(exclude)node_modules/**'], cwd);
     const untracked = await runBuffered('git', ['ls-files', '--others', '--exclude-standard', '--', '.', ':(exclude)node_modules/**'], cwd);
     const parts = [];
@@ -423,6 +440,7 @@ async function runGitDiff(job, cwd) {
 
 async function runGitPush(job, cwd) {
   try {
+    await trustProjectPath(cwd);
     const remotes = await runBuffered('git', ['remote'], cwd, { rejectOnFailure: true });
     if (!remotes.trim()) {
       append(job, [
@@ -439,6 +457,7 @@ async function runGitPush(job, cwd) {
       return;
     }
 
+    await runBuffered('gh', ['auth', 'setup-git'], cwd).catch(() => {});
     const output = await runBuffered('git', ['push'], cwd, { rejectOnFailure: true });
     append(job, output || 'Push completed.\n');
     job.status = 'complete';

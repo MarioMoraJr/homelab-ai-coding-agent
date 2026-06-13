@@ -5,6 +5,7 @@ USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        gh \
         git \
         ripgrep \
     && apt-get clean \
@@ -19,8 +20,8 @@ RUN npm install --omit=dev
 
 COPY mobile-agent-ui/ ./
 
-RUN mkdir -p /workspace /home/node/.gemini \
-    && chown -R node:node /app /workspace /home/node/.gemini
+RUN mkdir -p /workspace /home/node/.config/gh /home/node/.gemini \
+    && chown -R node:node /app /workspace /home/node/.config /home/node/.gemini
 
 USER node
 

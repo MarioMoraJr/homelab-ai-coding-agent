@@ -20,6 +20,7 @@ services:
       - ./workspace:/home/coder/workspace
       - ./config/agent-rules.md:/home/coder/agent-rules.md:ro
       - gemini-cli-data:/home/coder/.gemini
+      - github-cli-data:/home/coder/.config/gh
     working_dir: /home/coder/workspace
     entrypoint:
       - /bin/sh
@@ -111,8 +112,10 @@ services:
     volumes:
       - ./workspace:/workspace
       - gemini-cli-data:/home/node/.gemini
+      - github-cli-data:/home/node/.config/gh
 
 volumes:
   open-webui-data:
   openhands-data:
   gemini-cli-data:
+  github-cli-data:
