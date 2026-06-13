@@ -47,7 +47,7 @@ function setBusy(busy) {
 function renderJob(job) {
   jobTitle.textContent = `${job.label} - ${job.project}`;
   jobStatus.textContent = job.status;
-  output.textContent = job.output || 'Waiting for output...';
+  output.textContent = job.output || (job.status === 'running' ? 'Waiting for output...' : 'No output.');
   output.scrollTop = output.scrollHeight;
   setBusy(job.status === 'running');
 }

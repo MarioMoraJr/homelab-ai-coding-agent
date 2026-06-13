@@ -90,8 +90,8 @@ function commandFor(action, body) {
     case 'diff':
       return {
         label: 'Git Diff',
-        command: 'git',
-        args: ['--no-pager', 'diff', '--stat', '--patch', '--', '.', ':(exclude)node_modules/**']
+        type: 'git-diff',
+        timeoutMs: 2 * 60 * 1000
       };
     case 'test':
       return { label: 'Tests', command: 'npm', args: ['test'], timeoutMs: 10 * 60 * 1000 };
@@ -203,6 +203,13 @@ function startJob({ project, cwd, action, spec }) {
     return job;
   }
 
+  if (spec.type === 'git-diff') {
+    runGitDiff(job, cwd).finally(() => {
+      activeJobId = null;
+    });
+    return job;
+  }
+
   const child = spawn(spec.command, spec.args, {
     cwd,
     env: jobEnv(),
@@ -278,6 +285,34 @@ async function runLocalSuggest(job, cwd, spec) {
     job.exitCode = 1;
   } finally {
     clearTimeout(timer);
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
+async function runGitDiff(job, cwd) {
+  try {
+    const diff = await runBuffered('git', ['--no-pager', 'diff', '--stat', '--patch', '--', '.', ':(exclude)node_modules/**'], cwd);
+    const untracked = await runBuffered('git', ['ls-files', '--others', '--exclude-standard', '--', '.', ':(exclude)node_modules/**'], cwd);
+    const parts = [];
+
+    if (diff.trim()) {
+      parts.push(diff.trimEnd());
+    }
+    if (untracked.trim()) {
+      parts.push(`Untracked files:\n${untracked.trimEnd()}`);
+    }
+    if (parts.length === 0) {
+      parts.push('No tracked or untracked changes in this project.');
+    }
+
+    append(job, `${parts.join('\n\n')}\n`);
+    job.status = 'complete';
+    job.exitCode = 0;
+  } catch (error) {
+    append(job, `Git diff failed: ${error.message}\n`);
+    job.status = 'failed';
+    job.exitCode = 1;
+  } finally {
     job.finishedAt = new Date().toISOString();
   }
 }
