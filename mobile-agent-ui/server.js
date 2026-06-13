@@ -398,13 +398,16 @@ async function runApplyPatch(job, cwd, project) {
   const patchPath = path.join(cwd, `.mobile-agent-${job.id}.patch`);
   try {
     await trustProjectPath(cwd);
+    await ensureCleanProject(cwd);
     await fs.writeFile(patchPath, suggestion.patch, 'utf8');
     await applyPatchFile(job, cwd, patchPath);
+    await validateProjectAfterPatch(job, cwd);
     append(job, 'Patch applied successfully.\nRun Tests and Diff next before committing.\n');
     suggestions.delete(project);
     job.status = 'complete';
     job.exitCode = 0;
   } catch (error) {
+    await restoreFailedPatch(job, cwd);
     suggestions.delete(project);
     append(job, `Patch was not applied.\n${error.message}\n\nRun Local Suggest again so the next patch is based on the current files.\n`);
     job.status = 'failed';
@@ -413,6 +416,18 @@ async function runApplyPatch(job, cwd, project) {
     await fs.rm(patchPath, { force: true }).catch(() => {});
     job.finishedAt = new Date().toISOString();
   }
+}
+
+async function ensureCleanProject(cwd) {
+  const status = await runBuffered('git', ['status', '--porcelain', '--', '.', ':(exclude)node_modules/**'], cwd, { rejectOnFailure: true });
+  if (status.trim()) {
+    throw new Error(`Project has existing changes. Run Diff, then commit or revert them before applying a new patch.\n${status}`);
+  }
+}
+
+async function restoreFailedPatch(job, cwd) {
+  await runBuffered('git', ['restore', '--staged', '--worktree', '--', '.'], cwd).catch(() => {});
+  await runBuffered('git', ['clean', '-fd', '--', '.', ':(exclude)node_modules/**'], cwd).catch(() => {});
 }
 
 async function applyPatchFile(job, cwd, patchPath) {
@@ -428,6 +443,15 @@ async function applyPatchFile(job, cwd, patchPath) {
   const dryRun = await runBuffered('patch', ['--dry-run', '--batch', '--forward', '--fuzz=3', '-p1', '-i', patchPath], cwd, { rejectOnFailure: true });
   if (dryRun.trim()) append(job, `${dryRun.trimEnd()}\n`);
   const output = await runBuffered('patch', ['--batch', '--forward', '--fuzz=3', '-p1', '-i', patchPath], cwd, { rejectOnFailure: true });
+  if (output.trim()) append(job, `${output.trimEnd()}\n`);
+  await runBuffered('find', ['.', '-name', '*.orig', '-delete'], cwd).catch(() => {});
+}
+
+async function validateProjectAfterPatch(job, cwd) {
+  const packageJson = JSON.parse(await fs.readFile(path.join(cwd, 'package.json'), 'utf8').catch(() => '{}'));
+  if (!packageJson.scripts?.test) return;
+  append(job, '\nValidating patch with npm test...\n');
+  const output = await runBuffered('npm', ['test'], cwd, { rejectOnFailure: true });
   if (output.trim()) append(job, `${output.trimEnd()}\n`);
 }
 
