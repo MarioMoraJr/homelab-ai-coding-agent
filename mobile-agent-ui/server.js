@@ -142,18 +142,44 @@ function extractDiffBlock(text) {
 }
 
 async function collectProjectContext(cwd) {
-  const [status, files] = await Promise.all([
+  const [status, files, trackedFiles] = await Promise.all([
     runBuffered('git', ['status', '--short', '--branch', '--', '.', ':(exclude)node_modules/**'], cwd).catch((error) => error.message),
-    runBuffered('find', ['.', '-path', './node_modules', '-prune', '-o', '-maxdepth', '2', '-type', 'f', '-print'], cwd).catch((error) => error.message)
+    runBuffered('find', ['.', '-path', './node_modules', '-prune', '-o', '-maxdepth', '2', '-type', 'f', '-print'], cwd).catch((error) => error.message),
+    runBuffered('git', ['ls-files', '--', '.', ':(exclude)node_modules/**'], cwd).catch(() => '')
   ]);
+  const snippets = await collectFileSnippets(cwd, trackedFiles);
 
   return [
     'Git status:',
     status.slice(0, 4000),
     '',
     'Files, depth 2:',
-    files.split('\n').filter((line) => !line.includes('/.git/')).slice(0, 120).join('\n')
+    files.split('\n').filter((line) => !line.includes('/.git/')).slice(0, 120).join('\n'),
+    '',
+    'Relevant file contents:',
+    snippets || '(No small source files selected.)'
   ].join('\n');
+}
+
+async function collectFileSnippets(cwd, trackedFiles) {
+  const candidates = trackedFiles
+    .split('\n')
+    .map((file) => file.trim())
+    .filter(Boolean)
+    .filter((file) => !file.includes('node_modules/'))
+    .filter((file) => /(^|\/)(package\.json|server\.js|app\.js|index\.js|main\.js|server\.mjs|app\.mjs|index\.mjs|README\.md)$/i.test(file))
+    .slice(0, 8);
+
+  const snippets = [];
+  for (const file of candidates) {
+    const absolute = path.resolve(cwd, file);
+    if (!absolute.startsWith(`${cwd}${path.sep}`) && absolute !== cwd) continue;
+    const stat = await fs.stat(absolute).catch(() => null);
+    if (!stat?.isFile() || stat.size > 20000) continue;
+    const content = await fs.readFile(absolute, 'utf8').catch(() => '');
+    snippets.push(`--- ${file} ---\n${content.slice(0, 6000)}`);
+  }
+  return snippets.join('\n\n');
 }
 
 function runBuffered(command, args, cwd, options = {}) {
@@ -276,7 +302,9 @@ async function runLocalSuggest(job, cwd, spec) {
     const prompt = [
       'You are a local coding copilot. Do not claim to edit files or run commands.',
       'Return a concise proposal the user can review.',
-      'If code changes are useful, include a unified diff in a fenced diff block.',
+      'If code changes are useful, include a valid unified diff in a fenced diff block.',
+      'Base patches only on the file contents shown below.',
+      'Avoid new runtime dependencies unless package.json already includes them.',
       'If commands are useful, include them in a fenced shell block.',
       'Do not invent files that are not present in the context unless you explicitly label them as new files.',
       '',
@@ -342,9 +370,9 @@ async function runApplyPatch(job, cwd, project) {
   const patchPath = path.join(cwd, `.mobile-agent-${job.id}.patch`);
   try {
     await fs.writeFile(patchPath, suggestion.patch, 'utf8');
-    const check = await runBuffered('git', ['apply', '--check', patchPath], cwd, { rejectOnFailure: true });
+    const check = await runBuffered('git', ['apply', '--check', '--recount', patchPath], cwd, { rejectOnFailure: true });
     if (check.trim()) append(job, check);
-    await runBuffered('git', ['apply', patchPath], cwd, { rejectOnFailure: true });
+    await runBuffered('git', ['apply', '--recount', patchPath], cwd, { rejectOnFailure: true });
     append(job, 'Patch applied successfully.\nRun Tests and Diff next before committing.\n');
     suggestions.delete(project);
     job.status = 'complete';
