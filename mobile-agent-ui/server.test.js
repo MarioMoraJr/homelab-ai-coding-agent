@@ -38,8 +38,6 @@ test('authenticates, lists projects, and starts a guarded push job', async (t) =
           'Suggested local-only improvement.',
           '',
           '```diff',
-          'diff --git a/README.md b/README.md',
-          'index ce01362..94954ab 100644',
           '--- a/README.md',
           '+++ b/README.md',
           '@@ -1,6 +1,7 @@',

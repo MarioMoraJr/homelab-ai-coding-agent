@@ -136,7 +136,7 @@ function commandFor(action, body) {
 function extractDiffBlock(text) {
   const fenced = text.match(/```(?:diff|patch)\s*\n([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : text;
-  const start = candidate.search(/^diff --git /m);
+  const start = candidate.search(/^(diff --git |--- (?:a\/|\S))/m);
   if (start === -1) return null;
   return candidate.slice(start).trimEnd() + '\n';
 }
