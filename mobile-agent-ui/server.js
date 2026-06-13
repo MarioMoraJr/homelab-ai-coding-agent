@@ -82,9 +82,17 @@ function commandFor(action, body) {
       };
     }
     case 'status':
-      return { label: 'Git Status', command: 'git', args: ['status', '--short', '--branch'] };
+      return {
+        label: 'Git Status',
+        command: 'git',
+        args: ['status', '--short', '--branch', '--', '.', ':(exclude)node_modules/**']
+      };
     case 'diff':
-      return { label: 'Git Diff', command: 'git', args: ['--no-pager', 'diff', '--stat', '--patch'] };
+      return {
+        label: 'Git Diff',
+        command: 'git',
+        args: ['--no-pager', 'diff', '--stat', '--patch', '--', '.', ':(exclude)node_modules/**']
+      };
     case 'test':
       return { label: 'Tests', command: 'npm', args: ['test'], timeoutMs: 10 * 60 * 1000 };
     case 'commit': {
@@ -93,7 +101,7 @@ function commandFor(action, body) {
       return {
         label: 'Commit',
         command: 'sh',
-        args: ['-lc', 'git add -A && git commit -m "$1"', 'commit', message]
+        args: ['-lc', 'git add -A -- . ":(exclude)node_modules/**" && git commit -m "$1"', 'commit', message]
       };
     }
     case 'push':
@@ -120,8 +128,8 @@ function commandFor(action, body) {
 
 async function collectProjectContext(cwd) {
   const [status, files] = await Promise.all([
-    runBuffered('git', ['status', '--short', '--branch'], cwd).catch((error) => error.message),
-    runBuffered('find', ['.', '-maxdepth', '2', '-type', 'f'], cwd).catch((error) => error.message)
+    runBuffered('git', ['status', '--short', '--branch', '--', '.', ':(exclude)node_modules/**'], cwd).catch((error) => error.message),
+    runBuffered('find', ['.', '-path', './node_modules', '-prune', '-o', '-maxdepth', '2', '-type', 'f', '-print'], cwd).catch((error) => error.message)
   ]);
 
   return [
