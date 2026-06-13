@@ -8,6 +8,7 @@ RUN apt-get update \
         build-essential \
         ca-certificates \
         curl \
+        gh \
         jq \
         make \
         nodejs \

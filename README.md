@@ -182,7 +182,7 @@ Use the code-server password by default, or set `MOBILE_AGENT_PASSWORD` in `.env
 
 ## Coding Agent Tools
 
-The code-server image is built locally from `Dockerfile.code-server`. It includes Git, Node.js/npm, Python, pip, venv support, Codex CLI, Gemini CLI, Bubblewrap sandbox support, `ripgrep`, `jq`, `tree`, build tools, and `socat` for local service forwarding.
+The code-server image is built locally from `Dockerfile.code-server`. It includes Git, GitHub CLI, Node.js/npm, Python, pip, venv support, Codex CLI, Gemini CLI, Bubblewrap sandbox support, `ripgrep`, `jq`, `tree`, build tools, and `socat` for local service forwarding.
 
 Inside code-server, Codex CLI can use the host Ollama service through a localhost forward:
 

@@ -74,6 +74,22 @@ Use a different local model:
 agent-local --model llama3.1:8b "Inspect this project and suggest one small improvement."
 ```
 
+## Create a private GitHub repo from code-server
+
+Use this when a workspace project has local commits but no remote.
+
+```bash
+cd ~/workspace/express-health
+git init
+printf "node_modules/\n.env\n" > .gitignore
+git add package.json package-lock.json server.js server.test.js .gitignore
+git commit -m "Initial express health app"
+gh auth login
+gh repo create express-health --private --source=. --remote=origin --push
+```
+
+If the initial commit already exists, skip the `git commit` line. After the first push, the mobile Git Push button can push future commits.
+
 ## Use the hybrid Gemini CLI helper
 
 Gemini CLI is an optional hybrid path: the model is remote, but file edits and shell commands execute locally inside the code-server container and the mounted workspace.
