@@ -470,10 +470,10 @@ function sameFailureHint(key, count) {
   return [
     `The same test failure has occurred ${count} times in a row ("${key.slice(0, 80)}").`,
     'The model is stuck. Most common causes:',
-    '(1) State order: the data your assertion expects was deleted or never created before that line — check whether a DELETE or clear-all runs before it and move the assertion earlier.',
-    '(2) Wrong shape: the actual API response includes extra or null fields your assertion omits — read the server handler and match its exact return value.',
-    'To fix a state-order problem: use write_file to rewrite the entire test file with the assertions placed in the correct order (all assertions that need data BEFORE any DELETE).',
-    'Do not use replace_text for large restructuring — use write_file instead.'
+    '(1) Missing create: your assertion expects data but nothing POSTed it to the server first. You CANNOT push to the server\'s internal arrays directly — all data must come from actual API calls (fetch POST requests).',
+    '(2) State order: a DELETE or clear-all ran before an assertion that needs data. Move the assertion before the DELETE.',
+    '(3) Wrong shape: the API returns different fields than your assertion expects — read the server handler.',
+    'Use write_file to rewrite server.test.js completely: single test() block, app.listen(0) for the port, all data created via POST before any assertions that need it, DELETE only at the end.',
   ].join(' ');
 }
 
