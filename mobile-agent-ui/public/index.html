@@ -32,13 +32,28 @@
           <label for="project">Project</label>
           <select id="project"></select>
 
-          <label for="prompt">Request</label>
-          <textarea id="prompt" rows="6" placeholder="Add a /version endpoint, run tests, and summarize the diff."></textarea>
+          <form id="new-project-form" class="project-form">
+            <label for="new-project-name">New Project</label>
+            <div class="project-create-row">
+              <input id="new-project-name" type="text" inputmode="text" placeholder="my-private-app">
+              <button type="submit" class="secondary">Create</button>
+            </div>
+            <label class="check-row">
+              <input id="github-private" type="checkbox" checked>
+              <span>Create private GitHub repo</span>
+            </label>
+          </form>
+
+          <section class="chat-panel" aria-label="Local agent chat">
+            <div id="chat-log" class="chat-log"></div>
+            <form id="chat-form" class="chat-form">
+              <label for="prompt">Message</label>
+              <textarea id="prompt" rows="4" placeholder="Add a /version endpoint, run tests, and summarize the diff."></textarea>
+              <button id="send-local-agent" type="submit">Send</button>
+            </form>
+          </section>
 
           <div class="button-grid">
-            <button data-action="agent" type="button">Run Agent</button>
-            <button data-action="local-suggest" type="button" class="secondary">Local Suggest</button>
-            <button data-action="apply-patch" type="button" class="secondary">Apply Patch</button>
             <button data-action="test" type="button" class="secondary">Tests</button>
             <button data-action="status" type="button" class="secondary">Status</button>
             <button data-action="diff" type="button" class="secondary">Diff</button>
@@ -50,6 +65,14 @@
           </div>
 
           <button id="push-button" data-action="push" type="button" class="danger">Git Push</button>
+
+          <div id="busy-overlay" class="busy-overlay" hidden>
+            <div class="busy-box" role="status" aria-live="polite">
+              <span class="spinner" aria-hidden="true"></span>
+              <strong>Agent working</strong>
+              <span id="busy-label">Waiting for output...</span>
+            </div>
+          </div>
         </section>
 
         <section class="output-section">

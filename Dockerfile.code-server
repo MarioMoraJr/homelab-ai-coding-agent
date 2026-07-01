@@ -29,8 +29,11 @@ RUN mkdir -p /home/coder/.config/gh /home/coder/.gemini \
 
 COPY scripts/agent-local /usr/local/bin/agent-local
 COPY scripts/agent-gemini /usr/local/bin/agent-gemini
+COPY scripts/agent-one /usr/local/bin/agent-one
+RUN mkdir -p /usr/local/lib/agent-one
+COPY scripts/agent_one.py /usr/local/lib/agent-one/agent_one.py
 COPY scripts/agent-doctor /usr/local/bin/agent-doctor
-RUN chmod +x /usr/local/bin/agent-local /usr/local/bin/agent-gemini /usr/local/bin/agent-doctor
+RUN chmod +x /usr/local/bin/agent-local /usr/local/bin/agent-gemini /usr/local/bin/agent-one /usr/local/bin/agent-doctor
 
 USER coder
 

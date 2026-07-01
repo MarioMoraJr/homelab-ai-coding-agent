@@ -184,6 +184,27 @@ Use the code-server password by default, or set `MOBILE_AGENT_PASSWORD` in `.env
 
 The code-server image is built locally from `Dockerfile.code-server`. It includes Git, GitHub CLI, Node.js/npm, Python, pip, venv support, Codex CLI, Gemini CLI, Bubblewrap sandbox support, `ripgrep`, `jq`, `tree`, build tools, and `socat` for local service forwarding.
 
+For one local model, one local agent, and one app, use `agent-one` from inside the app folder. It talks directly to Ollama and exposes a small workspace-scoped tool set: list files, read files, write files, replace exact text, and run non-destructive shell commands.
+
+```bash
+cd /home/coder/workspace/<project-folder>
+agent-one "Inspect this app and make one small safe improvement."
+```
+
+Use another installed Ollama model:
+
+```bash
+agent-one --model llama3.1:8b "Explain the app structure."
+```
+
+`agent-one` does not depend on structured OpenAI-style tool calls. The model replies with JSON actions, and the local Python runner executes the tools. This is the simplest path for your current installed models:
+
+```text
+qwen2.5-coder:7b
+llama3.1:8b
+llama3.1:latest
+```
+
 Inside code-server, Codex CLI can use the host Ollama service through a localhost forward:
 
 ```bash

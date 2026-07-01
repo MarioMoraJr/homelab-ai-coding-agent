@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: agent-one [--model MODEL] \"your coding task\"" >&2
+    exit 2
+fi
+
+model="${OLLAMA_MODEL:-qwen2.5-coder:7b}"
+
+if [ "${1:-}" = "--model" ]; then
+    if [ "$#" -lt 3 ]; then
+        echo "Usage: agent-one --model MODEL \"your coding task\"" >&2
+        exit 2
+    fi
+    model="$2"
+    shift 2
+fi
+
+export AGENT_ONE_MODEL="${model}"
+export PYTHONDONTWRITEBYTECODE=1
+exec python3 /usr/local/lib/agent-one/agent_one.py "$*"

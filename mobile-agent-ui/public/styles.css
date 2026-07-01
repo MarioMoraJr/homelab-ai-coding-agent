@@ -31,7 +31,8 @@ main {
 
 .login-panel,
 .controls,
-.output-section {
+.output-section,
+.chat-panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -44,7 +45,9 @@ main {
 
 .topbar,
 .output-head,
-.commit-row {
+.commit-row,
+.project-create-row,
+.check-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,6 +84,7 @@ h2 {
 .controls {
   display: grid;
   gap: 10px;
+  position: relative;
 }
 
 label {
@@ -103,7 +107,7 @@ textarea {
 
 textarea {
   resize: vertical;
-  min-height: 132px;
+  min-height: 96px;
 }
 
 button {
@@ -142,10 +146,136 @@ button.danger:active {
   background: #ffd8d5;
 }
 
+.busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(246, 247, 249, 0.78);
+  backdrop-filter: blur(3px);
+}
+
+.busy-box {
+  width: min(260px, calc(100% - 32px));
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(24, 32, 42, 0.14);
+  text-align: center;
+}
+
+.busy-box strong {
+  font-size: 15px;
+}
+
+.busy-box span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #d7dde5;
+  border-top-color: var(--primary);
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .button-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.project-form {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.project-create-row {
+  align-items: stretch;
+}
+
+.project-create-row button {
+  width: 104px;
+}
+
+.check-row {
+  justify-content: flex-start;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.check-row input {
+  width: auto;
+}
+
+.chat-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.chat-log {
+  display: grid;
+  gap: 10px;
+  min-height: 220px;
+  max-height: 42vh;
+  overflow: auto;
+}
+
+.chat-message {
+  display: grid;
+  gap: 4px;
+}
+
+.chat-message.user {
+  justify-items: end;
+}
+
+.chat-role {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-message pre {
+  width: min(100%, 620px);
+  min-height: 0;
+  max-height: none;
+  margin: 0;
+  background: #eef3f8;
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.chat-message.assistant pre {
+  background: #101820;
+  color: #dce6ef;
+}
+
+.chat-form {
+  display: grid;
+  gap: 8px;
 }
 
 .commit-row {
