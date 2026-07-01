@@ -48,7 +48,7 @@
     {
       "id": "syntax-error",
       "match": "SyntaxError: (.*)",
-      "hint": "Syntax error: $1. Read the file you just wrote and look for mismatched brackets, missing commas, or duplicate declarations near the reported line."
+      "hint": "Syntax error: $1. Use write_file to rewrite the entire file correctly from scratch — do NOT use replace_text, which can introduce bracket mismatches. Read the file first, fix the error mentally, then write the complete corrected file."
     }
   ]
 }

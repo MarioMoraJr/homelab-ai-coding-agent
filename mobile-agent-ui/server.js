@@ -548,6 +548,8 @@ async function runLocalAgent(job, cwd, spec) {
     let failureKeyCount = 0;
     let replaceFailStreak = 0;
     let replaceFailPath = null;
+    let lastWriteTool = null;
+    let lastWritePath = null;
 
     for (let step = 1; step <= 30; step += 1) {
       append(job, `Step ${step}/30\n`);
@@ -632,6 +634,8 @@ async function runLocalAgent(job, cwd, spec) {
         wroteProject = true;
         if (hasTestScript) testedAfterWrite = false;
         readOnlyLoopCount = 0;
+        lastWriteTool = tool;
+        lastWritePath = args.path || null;
         const writtenPath = args.path || null;
         if (writtenPath && writtenPath === lastWrittenPath) {
           consecutiveWriteCount += 1;
@@ -693,6 +697,13 @@ async function runLocalAgent(job, cwd, spec) {
         messages.push({ role: 'user', content: `replace_text cannot find the text to replace in ${replaceFailPath}. The old text you provided does not match the file exactly. Use write_file to rewrite the entire file with all changes applied correctly.` });
         replaceFailStreak = 0;
         replaceFailPath = null;
+      }
+
+      // Syntax error after replace_text: the replacement corrupted the file
+      if (tool === 'run_command' && /SyntaxError/.test(result.output || '') && lastWriteTool === 'replace_text') {
+        append(job, `SyntaxError after replace_text on ${lastWritePath}; suggesting write_file.\n\n`);
+        messages.push({ role: 'user', content: `replace_text introduced a SyntaxError in ${lastWritePath}. Stop using replace_text on this file — it is corrupting it. Use write_file to rewrite the entire file correctly from scratch.` });
+        lastWriteTool = null;
       }
       if (readOnlyLoopCount >= 4) {
         append(job, 'Read-only loop detected; forcing the next step to edit files or finish.\n\n');
