@@ -1,0 +1,44 @@
+{
+  "patterns": [
+    {
+      "id": "express-query-in-route",
+      "match": "PathError.*Unexpected \\?",
+      "hint": "Express route paths cannot contain '?'. Register the route without the query string (e.g. app.get('/search', ...)) and read the parameter inside the handler with req.query.paramName."
+    },
+    {
+      "id": "undefined-property",
+      "match": "Cannot read propert(?:y|ies) of undefined",
+      "hint": "A value is undefined when you try to access a property on it. Add a guard before use, e.g.: if (!req.query.q) return res.status(400).json({ error: 'q is required' });"
+    },
+    {
+      "id": "duplicate-identifier",
+      "match": "Identifier '(\\w+)' has already been declared",
+      "hint": "Variable '$1' was declared twice with const in the same scope. Every const must have a unique name."
+    },
+    {
+      "id": "assert-empty-array",
+      "match": "\\+ \\[\\]\\n[- ]+\\[",
+      "hint": "Assertion got an empty array but expected data. Most likely cause: the data was deleted or never created before this line. Check whether a DELETE or clear-all step runs before this assertion and move the assertion earlier if needed."
+    },
+    {
+      "id": "assert-deep-equal",
+      "match": "Expected values to be strictly deep-equal",
+      "hint": "Deep-equal assertion failed. Verify that your expected object includes ALL fields the server returns, including null fields (e.g. author: null). Read the server handler to confirm the exact response shape."
+    },
+    {
+      "id": "module-not-found",
+      "match": "Cannot find module '([^']+)'",
+      "hint": "Module '$1' is not installed. Run: npm install $1"
+    },
+    {
+      "id": "port-in-use",
+      "match": "EADDRINUSE",
+      "hint": "Port already in use. In tests, pass port 0 to listen so the OS picks a free port: app.listen(0, cb) and read the actual port from server.address().port."
+    },
+    {
+      "id": "syntax-error",
+      "match": "SyntaxError: (.*)",
+      "hint": "Syntax error: $1. Read the file you just wrote and look for mismatched brackets, missing commas, or duplicate declarations near the reported line."
+    }
+  ]
+}

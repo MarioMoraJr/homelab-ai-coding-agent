@@ -17,6 +17,12 @@ const jobs = new Map();
 const suggestions = new Map();
 let activeJobId = null;
 
+// Knowledge base: error patterns → hints, loaded from agent-patterns.json
+let agentErrorPatterns = [];
+fs.readFile(new URL('./agent-patterns.json', import.meta.url).pathname, 'utf8')
+  .then((text) => { agentErrorPatterns = JSON.parse(text).patterns || []; })
+  .catch(() => {});
+
 app.use(express.json({ limit: '64kb' }));
 app.use(express.static(new URL('./public', import.meta.url).pathname));
 
@@ -437,6 +443,36 @@ async function runLocalSuggest(job, cwd, spec) {
   }
 }
 
+function matchAgentPatterns(output) {
+  const hints = [];
+  for (const pattern of agentErrorPatterns) {
+    const match = output.match(new RegExp(pattern.match, 's'));
+    if (match) {
+      let hint = pattern.hint;
+      for (let i = 1; i < match.length; i++) hint = hint.replaceAll(`$${i}`, match[i] || '');
+      hints.push(hint);
+    }
+  }
+  return hints;
+}
+
+function extractTestFailureKey(output) {
+  const errorLine = output.match(/error:\s*\|-?\s*\n\s*(.+)/);
+  if (errorLine) return errorLine[1].trim().slice(0, 120);
+  const location = output.match(/location:\s*'([^']+)'/);
+  return location ? location[1] : null;
+}
+
+function sameFailureHint(key, count) {
+  return [
+    `The same test failure has occurred ${count} times in a row ("${key.slice(0, 80)}").`,
+    'The model is stuck. Most common causes:',
+    '(1) State order: the data your assertion expects was deleted or never created before that line — check whether a DELETE or clear-all runs before it and move the assertion earlier.',
+    '(2) Wrong shape: the actual API response includes extra or null fields your assertion omits — read the server handler and match its exact return value.',
+    'Read the current test file carefully, identify the root cause, and make a single targeted fix.'
+  ].join(' ');
+}
+
 function localAgentSystemPrompt(cwd) {
   return [
     'You are a local coding agent and project documentation companion working on exactly one app.',
@@ -453,6 +489,12 @@ function localAgentSystemPrompt(cwd) {
     '- Run relevant tests or checks when possible.',
     '- Never expose secrets or credentials.',
     '- Do not commit, push, delete large folders, or run destructive commands.',
+    '',
+    'Common mistakes to avoid:',
+    '- Express: never put query strings in a route path. Wrong: app.get(\'/search?q=\', ...). Right: app.get(\'/search\', (req, res) => { const q = req.query.q; ... })',
+    '- Tests: write assertions that need existing data BEFORE any DELETE or clear operation in the same test.',
+    '- Tests: every const must have a unique name — declaring the same name twice is a SyntaxError.',
+    '- Tests: assert the exact shape the server returns, including null fields (e.g. { text: "x", author: null }).',
     '',
     'Reply with one JSON object only. Do not use Markdown.',
     '',
@@ -496,6 +538,8 @@ async function runLocalAgent(job, cwd, spec) {
     let consecutiveWriteCount = 0;
     let lastWrittenPath = null;
     let lastActionJson = null;
+    let lastFailureKey = null;
+    let failureKeyCount = 0;
 
     for (let step = 1; step <= 30; step += 1) {
       append(job, `Step ${step}/30\n`);
@@ -599,7 +643,33 @@ async function runLocalAgent(job, cwd, spec) {
       }
       append(job, `${JSON.stringify(result, null, 2).slice(0, 5000)}\n\n`);
       messages.push({ role: 'assistant', content: JSON.stringify(action) });
-      messages.push({ role: 'user', content: `Tool result:\n${JSON.stringify(result)}` });
+
+      // Build tool result message, appending any pattern-matched hints
+      let toolResultContent = `Tool result:\n${JSON.stringify(result)}`;
+      if (tool === 'run_command') {
+        const output = result.output || '';
+        const patternHints = matchAgentPatterns(output);
+        if (patternHints.length > 0) {
+          toolResultContent += `\n\nHint: ${patternHints.join(' ')}`;
+          append(job, `Pattern hint: ${patternHints[0].slice(0, 120)}\n\n`);
+        }
+        const failKey = extractTestFailureKey(output);
+        if (failKey) {
+          failureKeyCount = failKey === lastFailureKey ? failureKeyCount + 1 : 1;
+          lastFailureKey = failKey;
+        } else {
+          lastFailureKey = null;
+          failureKeyCount = 0;
+        }
+      }
+      messages.push({ role: 'user', content: toolResultContent });
+
+      if (failureKeyCount >= 3) {
+        append(job, `Same failure repeated ${failureKeyCount}×; injecting diagnostic hint.\n\n`);
+        messages.push({ role: 'user', content: sameFailureHint(lastFailureKey, failureKeyCount) });
+        failureKeyCount = 0;
+        lastFailureKey = null;
+      }
       if (readOnlyLoopCount >= 4) {
         append(job, 'Read-only loop detected; forcing the next step to edit files or finish.\n\n');
         messages.push({ role: 'user', content: nextActionInstruction() });
