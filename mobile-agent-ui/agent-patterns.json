@@ -26,9 +26,24 @@
       "hint": "Deep-equal assertion failed. Verify that your expected object includes ALL fields the server returns, including null fields (e.g. author: null). Read the server handler to confirm the exact response shape."
     },
     {
-      "id": "module-not-found",
-      "match": "Cannot find module '([^']+)'",
-      "hint": "Module '$1' is not installed. Run: npm install $1"
+      "id": "module-not-found-relative",
+      "match": "Cannot find module '((?:\\.\\.?/)[^']+)'",
+      "hint": "The require path '$1' is wrong. server.test.js and server.js are in the same directory — use require('./server') (no .js extension, no ../ prefix)."
+    },
+    {
+      "id": "module-not-found-npm",
+      "match": "Cannot find module '([^./'][^']*)'",
+      "hint": "npm package '$1' is not installed. Run: npm install $1"
+    },
+    {
+      "id": "app-listen-not-function",
+      "match": "app\\.listen is not a function",
+      "hint": "server.js is not exporting the Express app correctly. The file must end with `module.exports = app;` — not `module.exports = server` or the result of app.listen(). Also start the server only conditionally: `if (require.main === module) { app.listen(port, cb); }` so tests can import app without starting a server."
+    },
+    {
+      "id": "server-started-at-module-level",
+      "match": "Server(?:is)? running on port \\d+",
+      "hint": "server.js started a listening server when it was require()d by the test. The server must only start conditionally: `if (require.main === module) { app.listen(port, cb); }` and must export `module.exports = app;`. Tests start their own server on port 0."
     },
     {
       "id": "command-timed-out",
