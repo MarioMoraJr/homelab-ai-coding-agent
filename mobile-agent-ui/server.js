@@ -11,6 +11,7 @@ const workspaceRoot = path.resolve(process.env.WORKSPACE_ROOT || '/workspace');
 const password = process.env.MOBILE_AGENT_PASSWORD || '';
 const ollamaHost = process.env.OLLAMA_HOST || 'http://host.docker.internal:11434';
 const ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b';
+const ghCommand = process.env.GH_COMMAND || 'gh';
 const cookieName = 'mobile_agent_session';
 const jobs = new Map();
 const suggestions = new Map();
@@ -64,6 +65,17 @@ async function getProjectPath(project) {
     throw new Error('Project is not a directory');
   }
   return resolved;
+}
+
+function cleanProjectName(name) {
+  const cleaned = String(name || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!cleaned || cleaned.length > 80) {
+    throw new Error('Project name must use 1-80 letters, numbers, dots, underscores, or dashes');
+  }
+  if (cleaned === '.' || cleaned === '..' || cleaned.includes('..')) {
+    throw new Error('Invalid project name');
+  }
+  return cleaned;
 }
 
 async function trustProjectPath(cwd) {
@@ -125,6 +137,17 @@ function commandFor(action, body) {
         timeoutMs: 5 * 60 * 1000
       };
     }
+    case 'local-agent': {
+      const prompt = String(body.prompt || '').trim();
+      if (!prompt) throw new Error('Prompt is required');
+      return {
+        label: `Local Agent (${ollamaModel})`,
+        type: 'local-agent',
+        prompt,
+        history: Array.isArray(body.history) ? body.history.slice(-8) : [],
+        timeoutMs: 15 * 60 * 1000
+      };
+    }
     case 'apply-patch':
       return {
         label: 'Apply Patch',
@@ -142,6 +165,24 @@ function extractDiffBlock(text) {
   const start = candidate.search(/^(diff --git |--- (?:a\/|\S))/m);
   if (start === -1) return null;
   return candidate.slice(start).trimEnd() + '\n';
+}
+
+function extractFileMapBlock(text) {
+  const fenced = text.match(/```json\s*\n([\s\S]*?)```/i);
+  if (!fenced) return null;
+  try {
+    const parsed = JSON.parse(fenced[1]);
+    const files = parsed.diff || parsed.files;
+    if (!files || typeof files !== 'object' || Array.isArray(files)) return null;
+    const cleanFiles = {};
+    for (const [file, content] of Object.entries(files)) {
+      if (typeof content !== 'string') return null;
+      cleanFiles[file] = content.endsWith('\n') ? content : `${content}\n`;
+    }
+    return cleanFiles;
+  } catch {
+    return null;
+  }
 }
 
 async function collectProjectContext(cwd) {
@@ -263,6 +304,13 @@ function startJob({ project, cwd, action, spec }) {
     return job;
   }
 
+  if (spec.type === 'local-agent') {
+    runLocalAgent(job, cwd, spec).finally(() => {
+      activeJobId = null;
+    });
+    return job;
+  }
+
   if (spec.type === 'git-diff') {
     runGitDiff(job, cwd).finally(() => {
       activeJobId = null;
@@ -363,13 +411,17 @@ async function runLocalSuggest(job, cwd, spec) {
     const suggestion = data.response || 'Ollama returned no response.';
     append(job, suggestion);
     const patch = extractDiffBlock(suggestion);
+    const files = patch ? null : extractFileMapBlock(suggestion);
     suggestions.set(job.project, {
       output: suggestion,
       patch,
+      files,
       createdAt: new Date().toISOString()
     });
     if (patch) {
       append(job, '\n\nPatch detected. Review it, then use Apply Patch if it looks good.');
+    } else if (files) {
+      append(job, '\n\nFile changes detected. Review them, then use Apply Patch if they look good.');
     } else {
       append(job, '\n\nNo applicable diff block detected.');
     }
@@ -385,10 +437,382 @@ async function runLocalSuggest(job, cwd, spec) {
   }
 }
 
+function localAgentSystemPrompt(cwd) {
+  return [
+    'You are a local coding agent and project documentation companion working on exactly one app.',
+    `Workspace root: ${cwd}`,
+    '',
+    'Rules:',
+    '- Work only inside the workspace root.',
+    '- Inspect files before editing.',
+    '- When the user asks about docs, first inspect README, docs folders, markdown files, package manifests, and nearby source files as needed.',
+    '- If the user asks you to create an app, feature, test, or file and the project is sparse, create the requested files after inspecting what exists. Do not stop just because only README or .gitignore exists.',
+    '- Answer questions conversationally, but still use tools to ground answers in the selected project.',
+    '- Make small, reviewable changes.',
+    '- Prefer focused edits over broad rewrites.',
+    '- Run relevant tests or checks when possible.',
+    '- Never expose secrets or credentials.',
+    '- Do not commit, push, delete large folders, or run destructive commands.',
+    '',
+    'Reply with one JSON object only. Do not use Markdown.',
+    '',
+    'Tool actions:',
+    '{"tool":"plan","args":{"steps":["inspect project files","read relevant docs","answer from evidence"]}}',
+    '{"tool":"list_files","args":{"path":"."}}',
+    '{"tool":"read_file","args":{"path":"relative/path"}}',
+    '{"tool":"write_file","args":{"path":"relative/path","content":"full file content"}}',
+    '{"tool":"replace_text","args":{"path":"relative/path","old":"exact text","new":"replacement text"}}',
+    '{"tool":"run_command","args":{"command":"npm test"}}',
+    '{"tool":"final","args":{"summary":"what changed","checks":"what you ran or why not"}}'
+  ].join('\n');
+}
+
+const INSPECTION_TOOLS = new Set(['list_files', 'read_file', 'run_command']);
+const WRITE_TOOLS = new Set(['write_file', 'replace_text']);
+const READ_ONLY_TOOLS = new Set(['plan', 'list_files', 'read_file']);
+const CHANGE_REQUEST_PATTERN = /\b(add|build|create|change|update|edit|implement|fix|write|generate)\b/i;
+
+async function runLocalAgent(job, cwd, spec) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), spec.timeoutMs || 15 * 60 * 1000);
+  const messages = [
+    { role: 'system', content: localAgentSystemPrompt(cwd) },
+    ...sanitizeChatHistory(spec.history),
+    { role: 'user', content: spec.prompt }
+  ];
+
+  try {
+    await trustProjectPath(cwd);
+    append(job, `Using local model: ${ollamaModel}\n`);
+    append(job, `Working directory: ${cwd}\n\n`);
+    let inspectedProject = false;
+    let wroteProject = false;
+    let readOnlyLoopCount = 0;
+    let consecutiveWriteCount = 0;
+    let lastWrittenPath = null;
+    let lastActionJson = null;
+
+    for (let step = 1; step <= 30; step += 1) {
+      append(job, `Step ${step}/30\n`);
+      const raw = await ollamaJsonChat(messages, controller.signal);
+      const parsed = parseJsonAction(raw);
+      const action = normalizeJsonAction(parsed);
+      const tool = action.tool;
+      const args = action.args || {};
+
+      // Detect exact action repetition before doing anything else
+      const actionJson = JSON.stringify(action);
+      if (tool && tool !== 'final' && actionJson === lastActionJson) {
+        append(job, 'Exact action repeated; breaking loop.\n\n');
+        messages.push({ role: 'assistant', content: raw });
+        messages.push({ role: 'user', content: 'You sent the exact same action twice in a row. Do not repeat it. If the task is complete use final, otherwise try a different tool or path.' });
+        lastActionJson = null;
+        continue;
+      }
+      lastActionJson = actionJson;
+
+      if (!tool) {
+        if (inspectedProject) {
+          if (shouldBlockNoChangeFinal(spec.prompt, parsed.response ?? parsed, wroteProject)) {
+            append(job, 'No-change answer blocked because the request asks for project changes.\n\n');
+            messages.push({ role: 'assistant', content: raw });
+            messages.push({ role: 'user', content: nextActionInstruction() });
+            continue;
+          }
+          append(job, `\n${formatPlainResponse(parsed.response ?? parsed)}\n`);
+          job.status = 'complete';
+          job.exitCode = 0;
+          return;
+        }
+        append(job, 'Model answered before inspecting enough project context; asking it to plan and use tools first.\n\n');
+        messages.push({ role: 'assistant', content: raw });
+        messages.push({ role: 'user', content: 'Your last JSON was missing a valid tool field. First reply with {"tool":"plan","args":{"steps":["inspect project files","read relevant docs","answer from evidence"]}}, then use list_files and read_file before final.' });
+        continue;
+      }
+
+      append(job, `Tool: ${tool}\n`);
+
+      if (tool === 'plan') {
+        const steps = Array.isArray(args.steps) ? args.steps : [];
+        append(job, `Plan:\n${steps.map((item) => `- ${item}`).join('\n') || '- Inspect the selected project first.'}\n\n`);
+        messages.push({ role: 'assistant', content: JSON.stringify(action) });
+        messages.push({ role: 'user', content: inspectedProject ? nextActionInstruction() : 'Plan noted. Now inspect the selected project with list_files, read_file, or run_command before answering.' });
+        if (inspectedProject) readOnlyLoopCount += 1;
+        continue;
+      }
+
+      if (tool === 'final') {
+        if (!inspectedProject) {
+          append(job, 'Final answer blocked until the agent inspects the selected project.\n\n');
+          messages.push({ role: 'assistant', content: JSON.stringify(action) });
+          messages.push({ role: 'user', content: 'You must inspect the selected project before final. Use list_files and read_file first.' });
+          continue;
+        }
+        if (shouldBlockNoChangeFinal(spec.prompt, args.summary || '', wroteProject)) {
+          append(job, 'No-change final answer blocked because the request asks for project changes.\n\n');
+          messages.push({ role: 'assistant', content: JSON.stringify(action) });
+          messages.push({ role: 'user', content: nextActionInstruction() });
+          continue;
+        }
+        append(job, `\n${args.summary || 'Done.'}\n`);
+        if (args.checks) append(job, `\nChecks: ${args.checks}\n`);
+        job.status = 'complete';
+        job.exitCode = 0;
+        return;
+      }
+
+      const result = await runLocalAgentTool(cwd, tool, args);
+      if (INSPECTION_TOOLS.has(tool) && !result.error) {
+        inspectedProject = true;
+      }
+      if (WRITE_TOOLS.has(tool) && !result.error) {
+        wroteProject = true;
+        readOnlyLoopCount = 0;
+        const writtenPath = args.path || null;
+        if (writtenPath && writtenPath === lastWrittenPath) {
+          consecutiveWriteCount += 1;
+        } else {
+          consecutiveWriteCount = 1;
+          lastWrittenPath = writtenPath;
+        }
+      } else {
+        consecutiveWriteCount = 0;
+        lastWrittenPath = null;
+        if (inspectedProject && READ_ONLY_TOOLS.has(tool)) {
+          readOnlyLoopCount += 1;
+        }
+      }
+      append(job, `${JSON.stringify(result, null, 2).slice(0, 5000)}\n\n`);
+      messages.push({ role: 'assistant', content: JSON.stringify(action) });
+      messages.push({ role: 'user', content: `Tool result:\n${JSON.stringify(result)}` });
+      if (readOnlyLoopCount >= 4) {
+        append(job, 'Read-only loop detected; forcing the next step to edit files or finish.\n\n');
+        messages.push({ role: 'user', content: nextActionInstruction() });
+        readOnlyLoopCount = 0;
+      }
+      if (consecutiveWriteCount >= 2) {
+        append(job, 'Write-loop detected on same file; prompting to test or finish.\n\n');
+        messages.push({ role: 'user', content: nextWriteLoopInstruction() });
+        consecutiveWriteCount = 0;
+        lastWrittenPath = null;
+      }
+    }
+
+    append(job, 'Stopped after 30 steps. The model kept looping instead of finishing. Try a narrower request or use Local Suggest for a patch proposal.\n');
+    job.status = 'failed';
+    job.exitCode = 1;
+  } catch (error) {
+    append(job, `\nLocal agent failed: ${error.message}\n`);
+    job.status = 'failed';
+    job.exitCode = 1;
+  } finally {
+    clearTimeout(timer);
+    job.finishedAt = new Date().toISOString();
+  }
+}
+
+function sanitizeChatHistory(history) {
+  return history
+    .filter((entry) => ['user', 'assistant'].includes(entry?.role) && typeof entry.content === 'string')
+    .map((entry) => ({
+      role: entry.role,
+      content: entry.content.slice(0, 4000)
+    }));
+}
+
+function nextActionInstruction() {
+  return [
+    'You have inspected the project. Do not call plan, list_files, or read_file again unless you need a new specific file.',
+    'If the user asked you to create or change code, use write_file or replace_text now, even if the project only has README or .gitignore.',
+    'If the requested work is complete, use final now.',
+    'Reply with exactly one JSON tool action.'
+  ].join(' ');
+}
+
+function nextWriteLoopInstruction() {
+  return [
+    'You have modified the same file multiple times in a row. Do not append more content to it.',
+    'If you need to verify your changes, run tests with run_command.',
+    'If the task is complete, use final now.',
+    'Reply with exactly one JSON tool action.'
+  ].join(' ');
+}
+
+function shouldBlockNoChangeFinal(prompt, response, wroteProject) {
+  if (wroteProject) return false;
+  if (!CHANGE_REQUEST_PATTERN.test(prompt || '')) return false;
+  const text = formatPlainResponse(response).toLowerCase();
+  return /no (specific )?changes were made|no code changes|nothing (was )?(changed|created|updated)|no files were changed/.test(text);
+}
+
+async function ollamaJsonChat(messages, signal) {
+  const response = await fetch(`${ollamaHost.replace(/\/$/, '')}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: ollamaModel,
+      messages,
+      stream: false,
+      format: 'json',
+      options: { temperature: 0 }
+    }),
+    signal
+  });
+  if (!response.ok) throw new Error(`Ollama returned HTTP ${response.status}`);
+  const data = await response.json();
+  return data.message?.content || '';
+}
+
+function parseJsonAction(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error(`Model did not return JSON: ${raw.slice(0, 500)}`);
+    return JSON.parse(match[0]);
+  }
+}
+
+function normalizeJsonAction(action) {
+  if (!action || typeof action !== 'object') return {};
+  if (action.tool) return { tool: normalizeToolName(action.tool), args: normalizeArgs(action.args || action.arguments || action.parameters) };
+  if (action.tool_name) return { tool: normalizeToolName(action.tool_name), args: normalizeArgs(action.arguments || action.args || action.parameters) };
+  if (action.name) return { tool: normalizeToolName(action.name), args: normalizeArgs(action.arguments || action.args || action.parameters) };
+  if (action.action) return { tool: normalizeToolName(action.action), args: normalizeArgs(action.arguments || action.args || action.parameters) };
+  if (action.function?.name) {
+    return {
+      tool: normalizeToolName(action.function.name),
+      args: normalizeArgs(action.function.arguments || action.arguments || action.args || action.parameters)
+    };
+  }
+  if (action.tool_call?.name) {
+    return {
+      tool: normalizeToolName(action.tool_call.name),
+      args: normalizeArgs(action.tool_call.arguments || action.arguments || action.args || action.parameters)
+    };
+  }
+  return action;
+}
+
+function normalizeToolName(name) {
+  const normalized = String(name || '').trim();
+  const aliases = {
+    create_file: 'write_file',
+    edit_file: 'replace_text',
+    update_file: 'replace_text',
+    shell: 'run_command',
+    command: 'run_command',
+    finish: 'final',
+    answer: 'final'
+  };
+  return aliases[normalized] || normalized;
+}
+
+function normalizeArgs(args) {
+  if (!args) return {};
+  if (typeof args === 'string') {
+    try {
+      return JSON.parse(args);
+    } catch {
+      return {};
+    }
+  }
+  return args;
+}
+
+function formatPlainResponse(response) {
+  if (typeof response === 'string') return response;
+  if (response?.summary) return String(response.summary);
+  if (response?.content) return String(response.content);
+  if (response?.message) return String(response.message);
+  return JSON.stringify(response, null, 2);
+}
+
+function resolveAgentPath(cwd, requested = '.') {
+  const resolved = path.resolve(cwd, requested);
+  if (!resolved.startsWith(`${cwd}${path.sep}`) && resolved !== cwd) {
+    throw new Error(`Path escapes project: ${requested}`);
+  }
+  return resolved;
+}
+
+async function runLocalAgentTool(cwd, tool, args) {
+  switch (tool) {
+    case 'list_files':
+      return listAgentFiles(cwd, args.path || '.');
+    case 'read_file':
+      return readAgentFile(cwd, args.path);
+    case 'write_file':
+      return writeAgentFile(cwd, args.path, args.content);
+    case 'replace_text':
+      return replaceAgentText(cwd, args.path, args.old, args.new);
+    case 'run_command':
+      return runAgentCommand(cwd, args.command);
+    default:
+      return { error: `Unknown tool: ${tool}` };
+  }
+}
+
+async function listAgentFiles(cwd, requested) {
+  const root = resolveAgentPath(cwd, requested);
+  const stat = await fs.stat(root).catch(() => null);
+  if (!stat) return { error: `Path does not exist: ${requested}` };
+  if (stat.isFile()) return { files: [path.relative(cwd, root)] };
+  const files = [];
+  await walkAgentFiles(cwd, root, files, 0);
+  return { files };
+}
+
+async function walkAgentFiles(cwd, directory, files, depth) {
+  if (depth > 3 || files.length >= 200) return;
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    if (files.length >= 200) return;
+    if (entry.name === '.git' || entry.name === 'node_modules') continue;
+    const absolute = path.join(directory, entry.name);
+    const relative = path.relative(cwd, absolute).replaceAll(path.sep, '/');
+    files.push(entry.isDirectory() ? `${relative}/` : relative);
+    if (entry.isDirectory()) {
+      await walkAgentFiles(cwd, absolute, files, depth + 1);
+    }
+  }
+}
+
+async function readAgentFile(cwd, requested) {
+  const file = resolveAgentPath(cwd, requested);
+  const stat = await fs.stat(file).catch(() => null);
+  if (!stat?.isFile()) return { error: `Not a file: ${requested}` };
+  const content = await fs.readFile(file, 'utf8');
+  return { content: content.slice(0, 20000), truncated: content.length > 20000 };
+}
+
+async function writeAgentFile(cwd, requested, content) {
+  const file = resolveAgentPath(cwd, requested);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, String(content ?? ''), 'utf8');
+  return { ok: true, path: path.relative(cwd, file) };
+}
+
+async function replaceAgentText(cwd, requested, oldText, newText) {
+  const file = resolveAgentPath(cwd, requested);
+  const content = await fs.readFile(file, 'utf8');
+  if (!content.includes(oldText)) return { error: 'Old text was not found' };
+  await fs.writeFile(file, content.replace(oldText, newText), 'utf8');
+  return { ok: true, path: path.relative(cwd, file) };
+}
+
+async function runAgentCommand(cwd, command) {
+  const blocked = /\b(rm\s+-rf|rmdir|del|format|shutdown|git\s+push|git\s+reset|git\s+checkout\s+--|sudo|chmod\s+-r|chown\s+-r)\b/i;
+  if (blocked.test(command)) return { error: `Blocked command: ${command}` };
+  const output = await runBuffered('sh', ['-lc', command], cwd);
+  return { output: output.slice(-12000) };
+}
+
 async function runApplyPatch(job, cwd, project) {
   const suggestion = suggestions.get(project);
-  if (!suggestion?.patch) {
-    append(job, 'No applicable patch found for this project. Run Local Suggest and ask for a unified diff first.\n');
+  if (!suggestion?.patch && !suggestion?.files) {
+    append(job, 'No applicable patch or file changes found for this project. Run Local Suggest and ask for a unified diff first.\n');
     job.status = 'failed';
     job.exitCode = 1;
     job.finishedAt = new Date().toISOString();
@@ -399,8 +823,12 @@ async function runApplyPatch(job, cwd, project) {
   try {
     await trustProjectPath(cwd);
     await ensureCleanProject(cwd);
-    await fs.writeFile(patchPath, suggestion.patch, 'utf8');
-    await applyPatchFile(job, cwd, patchPath);
+    if (suggestion.patch) {
+      await fs.writeFile(patchPath, suggestion.patch, 'utf8');
+      await applyPatchFile(job, cwd, patchPath);
+    } else {
+      await applySuggestedFiles(job, cwd, suggestion.files);
+    }
     await validateProjectAfterPatch(job, cwd);
     append(job, 'Patch applied successfully.\nRun Tests and Diff next before committing.\n');
     suggestions.delete(project);
@@ -447,6 +875,18 @@ async function applyPatchFile(job, cwd, patchPath) {
   await runBuffered('find', ['.', '-name', '*.orig', '-delete'], cwd).catch(() => {});
 }
 
+async function applySuggestedFiles(job, cwd, files) {
+  for (const [file, content] of Object.entries(files)) {
+    const destination = path.resolve(cwd, file);
+    if (!destination.startsWith(`${cwd}${path.sep}`) && destination !== cwd) {
+      throw new Error(`Suggested file escapes project: ${file}`);
+    }
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(destination, content, 'utf8');
+    append(job, `Wrote ${file}\n`);
+  }
+}
+
 async function findPatchFallback(cwd, patchPath) {
   const errors = [];
   for (const strip of ['-p1', '-p0']) {
@@ -471,12 +911,16 @@ async function validateProjectAfterPatch(job, cwd) {
 async function runGitDiff(job, cwd) {
   try {
     await trustProjectPath(cwd);
+    const staged = await runBuffered('git', ['--no-pager', 'diff', '--cached', '--stat', '--patch', '--', '.', ':(exclude)node_modules/**'], cwd);
     const diff = await runBuffered('git', ['--no-pager', 'diff', '--stat', '--patch', '--', '.', ':(exclude)node_modules/**'], cwd);
     const untracked = await runBuffered('git', ['ls-files', '--others', '--exclude-standard', '--', '.', ':(exclude)node_modules/**'], cwd);
     const parts = [];
 
+    if (staged.trim()) {
+      parts.push(`Staged changes:\n${staged.trimEnd()}`);
+    }
     if (diff.trim()) {
-      parts.push(diff.trimEnd());
+      parts.push(`Unstaged changes:\n${diff.trimEnd()}`);
     }
     if (untracked.trim()) {
       parts.push(`Untracked files:\n${untracked.trimEnd()}`);
@@ -500,24 +944,49 @@ async function runGitDiff(job, cwd) {
 async function runGitPush(job, cwd) {
   try {
     await trustProjectPath(cwd);
+    await ensureGitIdentity(cwd, (chunk) => append(job, `${chunk}\n`));
     const remotes = await runBuffered('git', ['remote'], cwd, { rejectOnFailure: true });
     if (!remotes.trim()) {
-      append(job, [
-        'No Git remote is configured for this project.',
-        '',
-        'Create a GitHub repository, then add it from code-server or a terminal:',
-        'git remote add origin <github-repo-url>',
-        'git push -u origin main',
-        '',
-        'After that, the Git Push button can push future commits.'
-      ].join('\n') + '\n');
-      job.status = 'failed';
-      job.exitCode = 1;
+      const projectName = path.basename(cwd);
+      append(job, `No Git remote is configured. Creating private GitHub repo: ${projectName}\n`);
+      await ensureInitialCommit(job, cwd);
+      if (process.env.MOBILE_AGENT_FAKE_GITHUB_OWNER) {
+        const repoUrl = `https://github.com/${process.env.MOBILE_AGENT_FAKE_GITHUB_OWNER}/${projectName}.git`;
+        await runBuffered('git', ['remote', 'add', 'origin', repoUrl], cwd, { rejectOnFailure: true });
+        append(job, `created private repo: ${repoUrl}\n`);
+        job.status = 'complete';
+        job.exitCode = 0;
+        return;
+      }
+      await runBuffered(ghCommand, ['auth', 'status'], cwd, { rejectOnFailure: true }).catch((error) => {
+        throw new Error(`GitHub CLI is not authenticated. Run gh auth login in code-server first.\n${error.message}`);
+      });
+      const createOutput = await runBuffered(
+        ghCommand,
+        ['repo', 'create', projectName, '--private', '--source', '.', '--remote', 'origin', '--push'],
+        cwd,
+        { rejectOnFailure: true }
+      ).catch(async (error) => {
+        if (!/Name already exists|already exists/i.test(error.message)) throw error;
+        append(job, 'A GitHub repo with this name already exists. Attaching it as origin and pushing.\n');
+        const login = await githubLogin(cwd);
+        const repoUrl = `https://github.com/${login}/${projectName}.git`;
+        await runBuffered('git', ['remote', 'add', 'origin', repoUrl], cwd, { rejectOnFailure: true }).catch(async (remoteError) => {
+          if (!/remote origin already exists/i.test(remoteError.message)) throw remoteError;
+          await runBuffered('git', ['remote', 'set-url', 'origin', repoUrl], cwd, { rejectOnFailure: true });
+        });
+        const pushOutput = await runBuffered('git', ['push', '-u', 'origin', 'main'], cwd, { rejectOnFailure: true });
+        return pushOutput || `Pushed to existing private GitHub repo: ${repoUrl}\n`;
+      });
+      append(job, createOutput || 'Private GitHub repository created and pushed.\n');
+      job.status = 'complete';
+      job.exitCode = 0;
       return;
     }
 
-    await runBuffered('gh', ['auth', 'setup-git'], cwd).catch(() => {});
-    const output = await runBuffered('git', ['push'], cwd, { rejectOnFailure: true });
+    await ensureInitialCommit(job, cwd);
+    await runBuffered(ghCommand, ['auth', 'setup-git'], cwd).catch(() => {});
+    const output = await runBuffered('git', ['push', '-u', 'origin', 'main'], cwd, { rejectOnFailure: true });
     append(job, output || 'Push completed.\n');
     job.status = 'complete';
     job.exitCode = 0;
@@ -530,9 +999,28 @@ async function runGitPush(job, cwd) {
   }
 }
 
+async function ensureInitialCommit(job, cwd) {
+  const headExists = await runBuffered('git', ['rev-parse', '--verify', 'HEAD'], cwd, { rejectOnFailure: true })
+    .then(() => true)
+    .catch(() => false);
+  const status = await runBuffered('git', ['status', '--porcelain', '--', '.', ':(exclude)node_modules/**'], cwd, { rejectOnFailure: true });
+  if (!status.trim() && headExists) return;
+
+  await runBuffered('git', ['add', '-A', '--', '.'], cwd, { rejectOnFailure: true });
+  const commitMessage = headExists ? 'Save mobile agent changes' : 'Initial project';
+  const commitOutput = await runBuffered('git', ['commit', '-m', commitMessage], cwd, { rejectOnFailure: true });
+  append(job, commitOutput || `Committed changes: ${commitMessage}\n`);
+}
+
+async function githubLogin(cwd) {
+  const login = await runBuffered(ghCommand, ['api', 'user', '--jq', '.login'], cwd, { rejectOnFailure: true });
+  return login.trim();
+}
+
 async function runGitCommit(job, cwd, message) {
   try {
     await trustProjectPath(cwd);
+    await ensureGitIdentity(cwd, (chunk) => append(job, `${chunk}\n`));
     const addOutput = await runBuffered(
       'git',
       ['add', '-A', '--', '.'],
@@ -551,6 +1039,91 @@ async function runGitCommit(job, cwd, message) {
     job.exitCode = 1;
   } finally {
     job.finishedAt = new Date().toISOString();
+  }
+}
+
+async function getProjectInfo(entry) {
+  const projectPath = path.join(workspaceRoot, entry.name);
+  const [git, packageJson, remote] = await Promise.all([
+    fs.stat(path.join(projectPath, '.git')).then(() => true).catch(() => false),
+    fs.stat(path.join(projectPath, 'package.json')).then(() => true).catch(() => false),
+    runBuffered('git', ['remote', 'get-url', 'origin'], projectPath, { rejectOnFailure: true }).then((value) => value.trim()).catch(() => '')
+  ]);
+  return { name: entry.name, git, packageJson, ...(remote ? { remote } : {}) };
+}
+
+async function createProject({ name, githubPrivate }) {
+  const projectName = cleanProjectName(name);
+  const projectPath = path.join(workspaceRoot, projectName);
+  await fs.mkdir(workspaceRoot, { recursive: true });
+
+  const existing = await fs.stat(projectPath).catch(() => null);
+  if (existing) throw new Error(`Project already exists: ${projectName}`);
+
+  await fs.mkdir(projectPath, { recursive: true });
+  await fs.writeFile(path.join(projectPath, 'README.md'), `# ${projectName}\n\nProject notes and agent context live here.\n`, 'utf8');
+  await fs.writeFile(path.join(projectPath, '.gitignore'), 'node_modules/\n.env\n*.log\n', 'utf8');
+
+  const output = [];
+  const run = async (command, args, options = {}) => {
+    const text = await runBuffered(command, args, projectPath, options);
+    if (text.trim()) output.push(text.trim());
+    return text;
+  };
+
+  await run('git', ['init', '-b', 'main']).catch(async () => {
+    await run('git', ['init'], { rejectOnFailure: true });
+    await run('git', ['branch', '-M', 'main']).catch(() => {});
+  });
+  await trustProjectPath(projectPath);
+  await ensureGitIdentity(projectPath, output);
+  await run('git', ['add', 'README.md', '.gitignore'], { rejectOnFailure: true });
+  await run('git', ['commit', '-m', 'Initial project']).catch((error) => {
+    output.push(`Initial commit skipped: ${error.message}`);
+  });
+
+  if (githubPrivate) {
+      await runBuffered(ghCommand, ['auth', 'status'], projectPath, { rejectOnFailure: true }).catch((error) => {
+        throw new Error(`GitHub CLI is not authenticated. Run gh auth login in code-server first.\n${error.message}`);
+      });
+    await run(ghCommand, ['repo', 'create', projectName, '--private', '--source', '.', '--remote', 'origin', '--push'], { rejectOnFailure: true });
+  }
+
+  return {
+    project: projectName,
+    output: output.join('\n') || 'Project created.'
+  };
+}
+
+async function ensureGitIdentity(cwd, output) {
+  const [name, email] = await Promise.all([
+    runBuffered('git', ['config', 'user.name'], cwd, { rejectOnFailure: true }).then((value) => value.trim()).catch(() => ''),
+    runBuffered('git', ['config', 'user.email'], cwd, { rejectOnFailure: true }).then((value) => value.trim()).catch(() => '')
+  ]);
+  if (name && email) return;
+
+  const login = await runBuffered(ghCommand, ['api', 'user', '--jq', '.login'], cwd, { rejectOnFailure: true }).then((value) => value.trim()).catch(() => '');
+  const ghEmail = await runBuffered(ghCommand, ['api', 'user', '--jq', '.email'], cwd, { rejectOnFailure: true }).then((value) => value.trim()).catch(() => '');
+  const fallbackName = login || 'Mobile Agent';
+  const fallbackEmail = ghEmail && ghEmail !== 'null' ? ghEmail : `${fallbackName}@users.noreply.github.com`;
+
+  if (!name) {
+    await runBuffered('git', ['config', 'user.name', fallbackName], cwd, { rejectOnFailure: true });
+  }
+  if (!email) {
+    await runBuffered('git', ['config', 'user.email', fallbackEmail], cwd, { rejectOnFailure: true });
+  }
+  note(output, `Configured local Git author as ${fallbackName} <${fallbackEmail}>.`);
+}
+
+function note(output, message) {
+  if (!output) return;
+  if (Array.isArray(output)) {
+    output.push(message);
+    return;
+  }
+  if (typeof output === 'function') {
+    output(message);
   }
 }
 
@@ -585,15 +1158,22 @@ app.get('/api/projects', requireAuth, async (_req, res) => {
   const projects = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-    const projectPath = path.join(workspaceRoot, entry.name);
-    const [git, packageJson] = await Promise.all([
-      fs.stat(path.join(projectPath, '.git')).then(() => true).catch(() => false),
-      fs.stat(path.join(projectPath, 'package.json')).then(() => true).catch(() => false)
-    ]);
-    projects.push({ name: entry.name, git, packageJson });
+    projects.push(await getProjectInfo(entry));
   }
   projects.sort((a, b) => a.name.localeCompare(b.name));
   res.json({ projects });
+});
+
+app.post('/api/projects', requireAuth, async (req, res) => {
+  try {
+    const created = await createProject({
+      name: req.body?.name,
+      githubPrivate: Boolean(req.body?.githubPrivate)
+    });
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 app.post('/api/jobs', requireAuth, async (req, res) => {
