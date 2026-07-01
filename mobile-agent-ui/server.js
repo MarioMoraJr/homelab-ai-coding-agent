@@ -460,7 +460,10 @@ function extractTestFailureKey(output) {
   const errorLine = output.match(/error:\s*\|-?\s*\n\s*(.+)/);
   if (errorLine) return errorLine[1].trim().slice(0, 120);
   const location = output.match(/location:\s*'([^']+)'/);
-  return location ? location[1] : null;
+  if (location) return location[1];
+  // Catch structural test failures that don't surface as TAP assertion errors
+  if (/connect ECONNREFUSED/.test(output)) return 'ECONNREFUSED: test connecting to hardcoded port';
+  return null;
 }
 
 function sameFailureHint(key, count) {
@@ -496,6 +499,8 @@ function localAgentSystemPrompt(cwd) {
     '- Tests: write assertions that need existing data BEFORE any DELETE or clear operation in the same test.',
     '- Tests: every const must have a unique name — declaring the same name twice is a SyntaxError.',
     '- Tests: assert the exact shape the server returns, including null fields (e.g. { text: "x", author: null }).',
+    '- Tests: NEVER use a hardcoded port like 127.0.0.1:3000. Always start the server on port 0: const server = await new Promise(resolve => { const s = app.listen(0, () => resolve(s)); }); then use `http://127.0.0.1:${server.address().port}` as the base URL.',
+    '- Tests: do NOT use helper functions like clearQuotes() that call the API outside a test() block. Put all assertions inside the test() callback.',
     '',
     'Reply with one JSON object only. Do not use Markdown.',
     '',
@@ -909,7 +914,19 @@ async function replaceAgentText(cwd, requested, oldText, newText) {
 async function runAgentCommand(cwd, command) {
   const blocked = /\b(rm\s+-rf|rmdir|del|format|shutdown|git\s+push|git\s+reset|git\s+checkout\s+--|sudo|chmod\s+-r|chown\s+-r)\b/i;
   if (blocked.test(command)) return { error: `Blocked command: ${command}` };
-  const output = await runBuffered('sh', ['-lc', command], cwd);
+  const TIMEOUT_MS = 60_000;
+  const output = await new Promise((resolve) => {
+    const child = spawn('sh', ['-lc', command], { cwd, env: jobEnv(cwd), shell: false });
+    let buf = '';
+    child.stdout.on('data', (c) => { buf += c; });
+    child.stderr.on('data', (c) => { buf += c; });
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve(`${buf}\nERROR: command timed out after ${TIMEOUT_MS / 1000}s and was killed.`);
+    }, TIMEOUT_MS);
+    child.on('close', () => { clearTimeout(timer); resolve(buf); });
+    child.on('error', (err) => { clearTimeout(timer); resolve(`ERROR: ${err.message}`); });
+  });
   return { output: output.slice(-12000) };
 }
 

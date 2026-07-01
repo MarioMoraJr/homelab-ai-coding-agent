@@ -31,6 +31,16 @@
       "hint": "Module '$1' is not installed. Run: npm install $1"
     },
     {
+      "id": "command-timed-out",
+      "match": "ERROR: command timed out",
+      "hint": "The test command hung and was killed. Most likely cause: the test file called app.listen() or a server.listen() at the top level outside any test() block, keeping the process alive forever. Move all server startup inside a test() block: const server = await new Promise(resolve => { const s = app.listen(0, () => resolve(s)); }); and always call t.after(() => server.close()) to clean up."
+    },
+    {
+      "id": "econnrefused-hardcoded-port",
+      "match": "connect ECONNREFUSED 127\\.0\\.0\\.1:(\\d+)",
+      "hint": "The test is trying to connect to port $1 but nothing is listening there. Tests must start the server themselves on port 0 and use the assigned port: const server = await new Promise(resolve => { const s = app.listen(0, () => resolve(s)); }); const base = `http://127.0.0.1:${server.address().port}`; Do not hardcode any port number. Do not call API helpers outside a test() block."
+    },
+    {
       "id": "port-in-use",
       "match": "EADDRINUSE",
       "hint": "Port already in use. In tests, pass port 0 to listen so the OS picks a free port: app.listen(0, cb) and read the actual port from server.address().port."
