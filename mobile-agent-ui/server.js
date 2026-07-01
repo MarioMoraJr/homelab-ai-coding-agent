@@ -469,7 +469,8 @@ function sameFailureHint(key, count) {
     'The model is stuck. Most common causes:',
     '(1) State order: the data your assertion expects was deleted or never created before that line — check whether a DELETE or clear-all runs before it and move the assertion earlier.',
     '(2) Wrong shape: the actual API response includes extra or null fields your assertion omits — read the server handler and match its exact return value.',
-    'Read the current test file carefully, identify the root cause, and make a single targeted fix.'
+    'To fix a state-order problem: use write_file to rewrite the entire test file with the assertions placed in the correct order (all assertions that need data BEFORE any DELETE).',
+    'Do not use replace_text for large restructuring — use write_file instead.'
   ].join(' ');
 }
 
@@ -540,6 +541,8 @@ async function runLocalAgent(job, cwd, spec) {
     let lastActionJson = null;
     let lastFailureKey = null;
     let failureKeyCount = 0;
+    let replaceFailStreak = 0;
+    let replaceFailPath = null;
 
     for (let step = 1; step <= 30; step += 1) {
       append(job, `Step ${step}/30\n`);
@@ -669,6 +672,22 @@ async function runLocalAgent(job, cwd, spec) {
         messages.push({ role: 'user', content: sameFailureHint(lastFailureKey, failureKeyCount) });
         failureKeyCount = 0;
         lastFailureKey = null;
+      }
+
+      // replace_text failure streak: escalate to write_file
+      if (tool === 'replace_text' && result.error === 'Old text was not found') {
+        const p = args.path || null;
+        replaceFailStreak = p === replaceFailPath ? replaceFailStreak + 1 : 1;
+        replaceFailPath = p;
+      } else {
+        replaceFailStreak = 0;
+        replaceFailPath = null;
+      }
+      if (replaceFailStreak >= 2) {
+        append(job, `replace_text failed ${replaceFailStreak}× on ${replaceFailPath}; suggesting write_file.\n\n`);
+        messages.push({ role: 'user', content: `replace_text cannot find the text to replace in ${replaceFailPath}. The old text you provided does not match the file exactly. Use write_file to rewrite the entire file with all changes applied correctly.` });
+        replaceFailStreak = 0;
+        replaceFailPath = null;
       }
       if (readOnlyLoopCount >= 4) {
         append(job, 'Read-only loop detected; forcing the next step to edit files or finish.\n\n');
