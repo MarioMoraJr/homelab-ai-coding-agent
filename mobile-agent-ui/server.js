@@ -485,8 +485,13 @@ async function runLocalAgent(job, cwd, spec) {
     await trustProjectPath(cwd);
     append(job, `Using local model: ${ollamaModel}\n`);
     append(job, `Working directory: ${cwd}\n\n`);
+
+    const packageJson = await fs.readFile(path.join(cwd, 'package.json'), 'utf8').then(JSON.parse).catch(() => ({}));
+    const hasTestScript = Boolean(packageJson.scripts?.test);
+
     let inspectedProject = false;
     let wroteProject = false;
+    let testedAfterWrite = !hasTestScript;
     let readOnlyLoopCount = 0;
     let consecutiveWriteCount = 0;
     let lastWrittenPath = null;
@@ -548,6 +553,12 @@ async function runLocalAgent(job, cwd, spec) {
           messages.push({ role: 'user', content: 'You must inspect the selected project before final. Use list_files and read_file first.' });
           continue;
         }
+        if (wroteProject && !testedAfterWrite) {
+          append(job, 'Final blocked: files were written but tests were not run.\n\n');
+          messages.push({ role: 'assistant', content: JSON.stringify(action) });
+          messages.push({ role: 'user', content: 'You wrote files but did not run tests. Run the test suite with run_command before calling final.' });
+          continue;
+        }
         if (shouldBlockNoChangeFinal(spec.prompt, args.summary || '', wroteProject)) {
           append(job, 'No-change final answer blocked because the request asks for project changes.\n\n');
           messages.push({ role: 'assistant', content: JSON.stringify(action) });
@@ -567,6 +578,7 @@ async function runLocalAgent(job, cwd, spec) {
       }
       if (WRITE_TOOLS.has(tool) && !result.error) {
         wroteProject = true;
+        if (hasTestScript) testedAfterWrite = false;
         readOnlyLoopCount = 0;
         const writtenPath = args.path || null;
         if (writtenPath && writtenPath === lastWrittenPath) {
@@ -578,6 +590,9 @@ async function runLocalAgent(job, cwd, spec) {
       } else {
         consecutiveWriteCount = 0;
         lastWrittenPath = null;
+        if (tool === 'run_command' && /\btest\b|jest|mocha|vitest|tap|ava/i.test(args.command || '')) {
+          testedAfterWrite = true;
+        }
         if (inspectedProject && READ_ONLY_TOOLS.has(tool)) {
           readOnlyLoopCount += 1;
         }
