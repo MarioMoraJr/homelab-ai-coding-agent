@@ -82,8 +82,13 @@
               <p class="eyebrow">Live Output</p>
               <h2 id="job-title">Idle</h2>
             </div>
-            <span id="job-status">ready</span>
+            <div class="output-head-right">
+              <span id="job-status">ready</span>
+              <button id="history-toggle" class="secondary small" type="button">History</button>
+            </div>
           </div>
+          <div id="history-panel" class="history-panel" hidden></div>
+          <div id="steps-view" class="steps-view" hidden></div>
           <pre id="output"></pre>
         </section>
       </section>

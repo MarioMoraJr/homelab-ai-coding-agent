@@ -1335,6 +1335,36 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/jobs/:id/stream', requireAuth, (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  let sentLength = 0;
+
+  function flush() {
+    const chunk = job.output.slice(sentLength);
+    if (chunk) {
+      sentLength += chunk.length;
+      res.write(`data: ${JSON.stringify({ chunk, status: job.status })}\n\n`);
+    }
+    if (job.status !== 'running') {
+      res.write(`data: ${JSON.stringify({ done: true, status: job.status })}\n\n`);
+      clearInterval(ticker);
+      res.end();
+    }
+  }
+
+  const ticker = setInterval(flush, 250);
+  flush();
+
+  req.on('close', () => clearInterval(ticker));
+});
+
 app.get('/api/jobs/:id', requireAuth, (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found' });

@@ -297,6 +297,104 @@ button.danger:active {
   margin-top: 12px;
 }
 
+.output-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+button.small {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.history-panel {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.history-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.history-row:last-child { border-bottom: none; }
+.history-row:hover { background: var(--soft); }
+.history-row.status-complete .history-label::before { content: '✓ '; color: #2e7d32; }
+.history-row.status-failed .history-label::before   { content: '✗ '; color: var(--danger); }
+.history-row.status-cancelled .history-label::before { content: '⊘ '; color: var(--muted); }
+
+.history-label { font-weight: 500; flex: 1; }
+.history-meta  { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.history-empty { padding: 12px; color: var(--muted); font-size: 13px; margin: 0; }
+
+.steps-view {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.step-card summary {
+  padding: 7px 10px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  background: var(--soft);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-card summary::before {
+  content: '▶';
+  font-size: 9px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.step-card[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.step-card.tool-write_file summary,
+.step-card.tool-replace_text summary { background: #fff8e1; }
+.step-card.tool-run_command summary   { background: #e8f5e9; }
+.step-card.tool-final summary         { background: #e8eaf6; }
+
+.step-body {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--panel);
+}
+
 #job-status {
   border: 1px solid var(--line);
   border-radius: 999px;

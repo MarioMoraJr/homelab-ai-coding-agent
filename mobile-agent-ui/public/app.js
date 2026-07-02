@@ -17,6 +17,9 @@ const logoutButton = document.querySelector('#logout');
 const busyOverlay = document.querySelector('#busy-overlay');
 const busyLabel = document.querySelector('#busy-label');
 const cancelButton = document.querySelector('#cancel-job');
+const stepsView = document.querySelector('#steps-view');
+const historyPanel = document.querySelector('#history-panel');
+const historyToggle = document.querySelector('#history-toggle');
 let pollTimer = null;
 let activeJobId = null;
 const chatHistoryByProject = new Map();
@@ -90,41 +93,126 @@ function setBusy(busy) {
   busyOverlay.hidden = !busy;
 }
 
+function parseSteps(text) {
+  const steps = [];
+  const stepPattern = /Step (\d+)\/\d+\nTool: (\S+)\n([\s\S]*?)(?=\nStep \d+\/\d+\n|$)/g;
+  let match;
+  while ((match = stepPattern.exec(text)) !== null) {
+    steps.push({ num: match[1], tool: match[2], body: match[3].trim() });
+  }
+  return steps;
+}
+
+function renderSteps(text, action) {
+  if (action !== 'local-agent') { stepsView.hidden = true; return; }
+  const steps = parseSteps(text);
+  if (steps.length === 0) { stepsView.hidden = true; return; }
+  stepsView.hidden = false;
+  stepsView.innerHTML = '';
+  for (const step of steps) {
+    const details = document.createElement('details');
+    details.className = `step-card tool-${step.tool}`;
+    const summary = document.createElement('summary');
+    summary.textContent = `Step ${step.num} · ${step.tool}`;
+    const body = document.createElement('pre');
+    body.className = 'step-body';
+    body.textContent = step.body.slice(0, 2000);
+    details.append(summary, body);
+    stepsView.append(details);
+  }
+  const last = stepsView.querySelector('details:last-child');
+  if (last) last.open = true;
+}
+
 function renderJob(job) {
   jobTitle.textContent = `${job.label} - ${job.project}`;
   jobStatus.textContent = job.status;
   busyLabel.textContent = job.status === 'running' ? `${job.label} is running...` : 'Waiting for output...';
   output.textContent = job.output || (job.status === 'running' ? 'Waiting for output...' : 'No output.');
   output.scrollTop = output.scrollHeight;
+  renderSteps(job.output || '', job.action);
   setBusy(job.status === 'running');
 }
 
-async function pollJob(id) {
+function streamJob(id, action) {
   activeJobId = id;
-  clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
-    try {
-      const { job } = await api(`/api/jobs/${id}`);
-      renderJob(job);
-      if (job.status !== 'running') {
-        clearInterval(pollTimer);
-        activeJobId = null;
-        setBusy(false);
-        if (job.action === 'local-agent' && job.status === 'complete') {
-          const text = job.output || 'Done.';
-          addChatMessage('assistant', text);
-          rememberChat('assistant', text);
-        }
-      }
-    } catch (error) {
-      clearInterval(pollTimer);
-      activeJobId = null;
-      jobStatus.textContent = 'error';
-      output.textContent += `\n${error.message}`;
-      setBusy(false);
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+
+  let accumulated = '';
+  const es = new EventSource(`/api/jobs/${id}/stream`);
+
+  es.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.chunk) {
+      accumulated += msg.chunk;
+      output.textContent = accumulated || 'Waiting for output...';
+      output.scrollTop = output.scrollHeight;
+      jobStatus.textContent = 'running';
+      renderSteps(accumulated, action);
     }
-  }, 1200);
+    if (msg.done) {
+      es.close();
+      activeJobId = null;
+      jobStatus.textContent = msg.status;
+      renderSteps(accumulated, action);
+      setBusy(false);
+      if (action === 'local-agent' && msg.status === 'complete') {
+        addChatMessage('assistant', accumulated || 'Done.');
+        rememberChat('assistant', accumulated || 'Done.');
+        // Auto-show diff after agent writes files
+        try {
+          const { job: diffJob } = await api('/api/jobs', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'diff', project: projectSelect.value })
+          });
+          streamJob(diffJob.id, 'diff');
+        } catch (_) { /* no diff if another job raced in */ }
+      }
+    }
+  };
+
+  es.onerror = () => {
+    es.close();
+    activeJobId = null;
+    jobStatus.textContent = 'error';
+    setBusy(false);
+  };
 }
+
+async function loadHistory() {
+  try {
+    const { jobs: list } = await api('/api/jobs');
+    historyPanel.innerHTML = '';
+    if (list.length === 0) {
+      historyPanel.innerHTML = '<p class="history-empty">No recent jobs.</p>';
+      return;
+    }
+    for (const job of list) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = `history-row status-${job.status}`;
+      const age = Math.round((Date.now() - new Date(job.startedAt)) / 60000);
+      row.innerHTML = `<span class="history-label">${job.label} · ${job.project}</span><span class="history-meta">${job.status} · ${age}m ago</span>`;
+      row.addEventListener('click', () => {
+        historyPanel.hidden = true;
+        jobTitle.textContent = `${job.label} - ${job.project}`;
+        jobStatus.textContent = job.status;
+        output.textContent = job.output || 'No output.';
+        renderSteps(job.output || '', job.action);
+        stepsView.hidden = !job.output;
+      });
+      historyPanel.append(row);
+    }
+  } catch (e) {
+    historyPanel.innerHTML = `<p class="history-empty">${e.message}</p>`;
+  }
+}
+
+historyToggle.addEventListener('click', async () => {
+  if (!historyPanel.hidden) { historyPanel.hidden = true; return; }
+  await loadHistory();
+  historyPanel.hidden = false;
+});
 
 cancelButton.addEventListener('click', async () => {
   if (!activeJobId) return;
@@ -170,7 +258,7 @@ async function runAction(action) {
     body: JSON.stringify(body)
   });
   renderJob(job);
-  await pollJob(job.id);
+  streamJob(job.id, action);
 }
 
 loginForm.addEventListener('submit', async (event) => {
