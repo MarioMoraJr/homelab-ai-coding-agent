@@ -775,8 +775,12 @@ function nextWriteLoopInstruction() {
 function shouldBlockNoChangeFinal(prompt, response, wroteProject) {
   if (wroteProject) return false;
   if (!CHANGE_REQUEST_PATTERN.test(prompt || '')) return false;
-  const text = formatPlainResponse(response).toLowerCase();
-  return /no (specific )?changes were made|no code changes|nothing (was )?(changed|created|updated)|no files were changed/.test(text);
+  const text = formatPlainResponse(response).toLowerCase().trim();
+  // Block explicit no-change phrases
+  if (/no (specific )?changes were made|no code changes|nothing (was )?(changed|created|updated)|no files were changed/.test(text)) return true;
+  // Block vague one-word completions like "Done." or "Complete." when nothing was written
+  if (text.length < 30 && /^(done|complete|finished|ok|okay|sure|yes|noted)[\s.!]*$/.test(text)) return true;
+  return false;
 }
 
 async function ollamaJsonChat(messages, signal) {
