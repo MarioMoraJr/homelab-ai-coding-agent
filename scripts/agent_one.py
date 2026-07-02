@@ -44,6 +44,9 @@ Important:
 - Paths must be relative to the workspace root.
 - Use final only when the task is complete or blocked.
 - If a tool result shows an error, choose a different small next step.
+- When writing test files, ALWAYS write the complete file — never use placeholder comments like "// Existing tests..." or "// ... rest of file". Include every test, every line.
+- Tests: NEVER use a hardcoded port. Always start the server on port 0: const server = await new Promise(resolve => {{ const s = app.listen(0, () => resolve(s)); }}); then use http://127.0.0.1:${{server.address().port}} as the base URL.
+- Tests: always export the app with module.exports = app; and start the server conditionally: if (require.main === module) {{ app.listen(port, cb); }}
 """.strip()
 
 
@@ -234,6 +237,9 @@ def main():
         {"role": "user", "content": task},
     ]
 
+    replace_fail_streak = 0
+    replace_fail_path = None
+
     for step in range(1, MAX_STEPS + 1):
         print()
         print(f"step {step}/{MAX_STEPS}")
@@ -269,6 +275,27 @@ def main():
                 result = {"error": "command timed out"}
             except Exception as exc:
                 result = {"error": str(exc)}
+
+        # replace_text failure streak guard
+        if tool == "replace_text" and result.get("error") == "old text was not found":
+            p = args.get("path")
+            replace_fail_streak = replace_fail_streak + 1 if p == replace_fail_path else 1
+            replace_fail_path = p
+        else:
+            replace_fail_streak = 0
+            replace_fail_path = None
+
+        if replace_fail_streak >= 2:
+            print(f"replace_text failed {replace_fail_streak}x on {replace_fail_path}; injecting write_file hint")
+            messages.append({"role": "assistant", "content": json.dumps(action)})
+            messages.append({"role": "user", "content": (
+                f"Tool result:\n{json.dumps(result)}\n\n"
+                f"replace_text has failed {replace_fail_streak} times on {replace_fail_path} because the old text does not match exactly. "
+                f"Stop using replace_text on this file. Use read_file to read the current content, then use write_file to rewrite the entire file correctly with all changes applied."
+            )})
+            replace_fail_streak = 0
+            replace_fail_path = None
+            continue
 
         print(json.dumps(result, indent=2)[:4000])
         messages.append({"role": "assistant", "content": json.dumps(action)})
