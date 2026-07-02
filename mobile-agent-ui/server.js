@@ -11,6 +11,7 @@ const workspaceRoot = path.resolve(process.env.WORKSPACE_ROOT || '/workspace');
 const password = process.env.MOBILE_AGENT_PASSWORD || '';
 const ollamaHost = process.env.OLLAMA_HOST || 'http://host.docker.internal:11434';
 const ollamaModel = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b';
+const architectModel = process.env.ARCHITECT_MODEL || 'deepseek-r1:7b';
 const ghCommand = process.env.GH_COMMAND || 'gh';
 const cookieName = 'mobile_agent_session';
 const jobs = new Map();
@@ -147,11 +148,11 @@ function commandFor(action, body) {
       const prompt = String(body.prompt || '').trim();
       if (!prompt) throw new Error('Prompt is required');
       return {
-        label: `Local Agent (${ollamaModel})`,
+        label: `Agent (${architectModel} → ${ollamaModel})`,
         type: 'local-agent',
         prompt,
         history: Array.isArray(body.history) ? body.history.slice(-8) : [],
-        timeoutMs: 15 * 60 * 1000
+        timeoutMs: 20 * 60 * 1000
       };
     }
     case 'apply-patch':
@@ -528,6 +529,43 @@ function localAgentSystemPrompt(cwd) {
   ].join('\n');
 }
 
+async function runArchitect(userPrompt, cwd, signal) {
+  const context = await collectProjectContext(cwd);
+  const systemPrompt = [
+    'You are a senior software architect. Given a feature request and the current project source, write a precise implementation spec.',
+    '',
+    'Your spec must include:',
+    '1. FILES TO MODIFY: exact file names and what to add or change in each',
+    '2. LOGIC: step-by-step implementation — exact route paths, function signatures, response shapes',
+    '3. EDGE CASES: what to return for invalid input, empty state, out-of-range values',
+    '4. TESTS TO ADD: exact test cases with concrete seed data, expected response shapes, and status codes',
+    '',
+    'Be specific. No placeholders. No "for example". Do not write code — describe precisely what the code must do.',
+  ].join('\n');
+
+  const response = await fetch(`${ollamaHost.replace(/\/$/, '')}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: architectModel,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Feature request: ${userPrompt}\n\nProject:\n${context}` }
+      ],
+      stream: false,
+      options: { temperature: 0.3 }
+    }),
+    signal
+  });
+
+  if (!response.ok) throw new Error(`Architect model returned HTTP ${response.status}`);
+  const data = await response.json();
+  const raw = data.message?.content || '';
+  // Strip deepseek-r1 chain-of-thought tags; keep only the final spec for the builder
+  const spec = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  return { raw, spec };
+}
+
 const INSPECTION_TOOLS = new Set(['list_files', 'read_file', 'run_command']);
 const WRITE_TOOLS = new Set(['write_file', 'replace_text']);
 const READ_ONLY_TOOLS = new Set(['plan', 'list_files', 'read_file']);
@@ -536,17 +574,30 @@ const CHANGE_REQUEST_PATTERN = /\b(add|build|create|change|update|edit|implement
 async function runLocalAgent(job, cwd, spec) {
   const controller = spec.signal ? { signal: spec.signal, abort: () => {} } : new AbortController();
   const signal = spec.signal || controller.signal;
-  const timer = setTimeout(() => controller.abort?.(), spec.timeoutMs || 15 * 60 * 1000);
-  const messages = [
-    { role: 'system', content: localAgentSystemPrompt(cwd) },
-    ...sanitizeChatHistory(spec.history),
-    { role: 'user', content: spec.prompt }
-  ];
+  const timer = setTimeout(() => controller.abort?.(), spec.timeoutMs || 20 * 60 * 1000);
 
   try {
     await trustProjectPath(cwd);
     append(job, `Using local model: ${ollamaModel}\n`);
     append(job, `Working directory: ${cwd}\n\n`);
+
+    // === Architect phase ===
+    append(job, `=== Architect (${architectModel}) ===\n`);
+    let builderPrompt = spec.prompt;
+    try {
+      const { raw, spec: expandedSpec } = await runArchitect(spec.prompt, cwd, signal);
+      append(job, `${raw}\n\n`);
+      if (expandedSpec) builderPrompt = expandedSpec;
+    } catch (archError) {
+      append(job, `Architect phase skipped: ${archError.message}\n\n`);
+    }
+    append(job, `=== Builder (${ollamaModel}) ===\n`);
+
+    const messages = [
+      { role: 'system', content: localAgentSystemPrompt(cwd) },
+      ...sanitizeChatHistory(spec.history),
+      { role: 'user', content: builderPrompt }
+    ];
 
     const packageJson = await fs.readFile(path.join(cwd, 'package.json'), 'utf8').then(JSON.parse).catch(() => ({}));
     const hasTestScript = Boolean(packageJson.scripts?.test);

@@ -383,6 +383,8 @@ button.small {
 .step-card.tool-replace_text summary { background: #fff8e1; }
 .step-card.tool-run_command summary   { background: #e8f5e9; }
 .step-card.tool-final summary         { background: #e8eaf6; }
+.step-card.tool-architect             { border-color: #7c5cbf; }
+.step-card.tool-architect summary     { background: #f3eeff; color: #5b2d9e; font-weight: 700; }
 
 .step-body {
   margin: 0;

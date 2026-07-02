@@ -108,6 +108,10 @@ function setBusy(busy) {
 
 function parseSteps(text) {
   const steps = [];
+  const archMatch = text.match(/=== Architect \([^)]+\) ===\n([\s\S]*?)(?=\n=== Builder \([^)]+\) ===|$)/);
+  if (archMatch) {
+    steps.push({ num: '✦', tool: 'architect', body: archMatch[1].trim() });
+  }
   const stepPattern = /Step (\d+)\/\d+\nTool: (\S+)\n([\s\S]*?)(?=\nStep \d+\/\d+\n|$)/g;
   let match;
   while ((match = stepPattern.exec(text)) !== null) {
@@ -126,10 +130,12 @@ function renderSteps(text, action) {
     const details = document.createElement('details');
     details.className = `step-card tool-${step.tool}`;
     const summary = document.createElement('summary');
-    summary.textContent = `Step ${step.num} · ${step.tool}`;
+    summary.textContent = step.tool === 'architect'
+      ? `✦ Architect Plan`
+      : `Step ${step.num} · ${step.tool}`;
     const body = document.createElement('pre');
     body.className = 'step-body';
-    body.textContent = step.body.slice(0, 2000);
+    body.textContent = step.body.slice(0, step.tool === 'architect' ? 8000 : 2000);
     details.append(summary, body);
     stepsView.append(details);
   }
