@@ -64,6 +64,16 @@
       "id": "syntax-error",
       "match": "SyntaxError: (.*)",
       "hint": "Syntax error: $1. Use write_file to rewrite the entire file correctly from scratch — do NOT use replace_text, which can introduce bracket mismatches. Read the file first, fix the error mentally, then write the complete corrected file."
+    },
+    {
+      "id": "wrong-test-framework",
+      "match": "ReferenceError: (describe|it|beforeAll|afterAll|beforeEach|afterEach) is not defined",
+      "hint": "This project uses node:test, not Jest/Mocha. Remove '$1' and all other Jest globals. The test file must use: const test = require('node:test'); const assert = require('node:assert/strict'); — then wrap everything in a single test('name', async (t) => { ... }) block. The test file must be at server.test.js in the project root, NOT inside a tests/ subdirectory. Delete any tests/ directory you created."
+    },
+    {
+      "id": "server-not-defined-in-listen",
+      "match": "ReferenceError: server is not defined[\\s\\S]*?server\\.js",
+      "hint": "server.js references 'server' before it is assigned. Do not use a variable called 'server' inside server.js — that name conflicts with the server object in the test. Export only the express app: module.exports = app; and start it conditionally with: if (require.main === module) { app.listen(port, cb); }"
     }
   ]
 }

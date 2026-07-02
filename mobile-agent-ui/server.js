@@ -513,6 +513,7 @@ function localAgentSystemPrompt(cwd) {
     '- Tests: every const must have a unique name — declaring the same name twice is a SyntaxError.',
     '- Tests: assert the exact shape the server returns, including null fields (e.g. { text: "x", author: null }).',
     '- Tests: NEVER use a hardcoded port like 127.0.0.1:3000. Always start the server on port 0: const server = await new Promise(resolve => { const s = app.listen(0, () => resolve(s)); }); then use `http://127.0.0.1:${server.address().port}` as the base URL.',
+    '- Tests: NEVER create a tests/ subdirectory. The test file is always server.test.js at the project root. NEVER use Jest globals (describe, it, beforeAll, afterAll) — this project uses node:test only.',
     '- Tests: do NOT use helper functions like clearQuotes() that call the API outside a test() block. Put all assertions inside the test() callback.',
     '- If you must start a dev server on a fixed port, use a port in 49152-65535 (see /workspace/port-registry.json). Add the port to the reserved list when starting and remove it when done. Never use ports below 49152 — they conflict with other running services.',
     '',
