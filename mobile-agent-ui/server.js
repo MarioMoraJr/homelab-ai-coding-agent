@@ -857,13 +857,9 @@ function nextWriteLoopInstruction() {
 
 function shouldBlockNoChangeFinal(prompt, response, wroteProject) {
   if (wroteProject) return false;
-  if (!CHANGE_REQUEST_PATTERN.test(prompt || '')) return false;
-  const text = formatPlainResponse(response).toLowerCase().trim();
-  // Block explicit no-change phrases
-  if (/no (specific )?changes were made|no code changes|nothing (was )?(changed|created|updated)|no files were changed/.test(text)) return true;
-  // Block vague one-word completions like "Done." or "Complete." when nothing was written
-  if (text.length < 30 && /^(done|complete|finished|ok|okay|sure|yes|noted)[\s.!]*$/.test(text)) return true;
-  return false;
+  // If the task asks for code changes and nothing was written, always block final.
+  // The model must use write_file or replace_text before it can call final.
+  return CHANGE_REQUEST_PATTERN.test(prompt || '');
 }
 
 async function ollamaJsonChat(messages, signal) {
