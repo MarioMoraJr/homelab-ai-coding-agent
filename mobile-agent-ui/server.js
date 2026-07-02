@@ -547,6 +547,7 @@ async function runArchitect(userPrompt, cwd, signal) {
     '- Do not invent new files or modules that do not already exist in the project.',
     '- Base your spec only on the files shown in the project context below.',
     '- Be specific about exact values (route paths, field names, status codes, variable names).',
+    '- BACKWARD COMPATIBILITY: if the request says "with no params return X as before", spell out the exact conditional: "if NEITHER page NOR limit is in req.query, return the plain array directly — otherwise return the pagination object". The builder must know EXACTLY when to branch.',
   ].join('\n');
 
   const response = await fetch(`${ollamaHost.replace(/\/$/, '')}/api/chat`, {
@@ -616,6 +617,7 @@ async function runLocalAgent(job, cwd, spec) {
     const readPaths = new Set();
     let wroteProject = false;
     let testedAfterWrite = !hasTestScript;
+    let lastTestPassed = !hasTestScript;
     let readOnlyLoopCount = 0;
     let consecutiveWriteCount = 0;
     let lastWrittenPath = null;
@@ -689,6 +691,12 @@ async function runLocalAgent(job, cwd, spec) {
           messages.push({ role: 'user', content: 'You wrote files but did not run tests. Run the test suite with run_command before calling final.' });
           continue;
         }
+        if (testedAfterWrite && !lastTestPassed) {
+          append(job, 'Final blocked: the last test run had failures.\n\n');
+          messages.push({ role: 'assistant', content: JSON.stringify(action) });
+          messages.push({ role: 'user', content: 'Tests are still failing. Fix the failing assertions, then run tests again before calling final.' });
+          continue;
+        }
         if (shouldBlockNoChangeFinal(spec.prompt, args.summary || '', wroteProject)) {
           append(job, 'No-change final answer blocked because the request asks for project changes.\n\n');
           messages.push({ role: 'assistant', content: JSON.stringify(action) });
@@ -735,6 +743,8 @@ async function runLocalAgent(job, cwd, spec) {
         lastWrittenPath = null;
         if (tool === 'run_command' && /\btest\b|jest|mocha|vitest|tap|ava/i.test(args.command || '')) {
           testedAfterWrite = true;
+          const out = result.output || '';
+          lastTestPassed = /# fail\s+0\b/.test(out) || (/# pass\s+[1-9]/.test(out) && !/# fail\s+[1-9]/.test(out));
         }
         if (inspectedProject && READ_ONLY_TOOLS.has(tool)) {
           readOnlyLoopCount += 1;
