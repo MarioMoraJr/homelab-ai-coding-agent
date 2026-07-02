@@ -700,7 +700,7 @@ async function runLocalAgent(job, cwd, spec) {
         if (shouldBlockNoChangeFinal(spec.prompt, args.summary || '', wroteProject)) {
           append(job, 'No-change final answer blocked because the request asks for project changes.\n\n');
           messages.push({ role: 'assistant', content: JSON.stringify(action) });
-          messages.push({ role: 'user', content: nextActionInstruction() });
+          messages.push({ role: 'user', content: 'You have not written any files yet. DO NOT call final again. You must use replace_text or write_file to make the requested code changes first. Pick the right file and make the edit now.' });
           continue;
         }
         append(job, `\n${args.summary || 'Done.'}\n`);
@@ -803,8 +803,8 @@ async function runLocalAgent(job, cwd, spec) {
         lastWriteTool = null;
       }
       if (readOnlyLoopCount >= 4) {
-        append(job, 'Read-only loop detected; forcing the next step to edit files or finish.\n\n');
-        messages.push({ role: 'user', content: nextActionInstruction() });
+        append(job, 'Read-only loop detected; forcing the next step to edit files.\n\n');
+        messages.push({ role: 'user', content: 'You have been reading files without making changes. Stop reading. Use replace_text or write_file to implement the requested changes now. Reply with exactly one JSON tool action that writes to a file.' });
         readOnlyLoopCount = 0;
       }
       if (consecutiveWriteCount >= 2) {
