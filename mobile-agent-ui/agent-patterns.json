@@ -79,6 +79,11 @@
       "id": "server-not-defined-in-listen",
       "match": "ReferenceError: server is not defined[\\s\\S]*?server\\.js",
       "hint": "server.js references 'server' before it is assigned. Do not use a variable called 'server' inside server.js — that name conflicts with the server object in the test. Export only the express app: module.exports = app; and start it conditionally with: if (require.main === module) { app.listen(port, cb); }"
+    },
+    {
+      "id": "require-in-esm",
+      "match": "require is not defined in ES module scope",
+      "hint": "server.test.js was written with top-level await, which makes Node.js treat it as an ES module — but require() only works in CommonJS. Fix: use write_file to completely rewrite server.test.js using only CommonJS style. Start with: const test = require('node:test'); const assert = require('node:assert/strict'); const app = require('./server'); — then wrap ALL code inside a single test('quote API', async (t) => { ... }) block. NEVER use top-level await or top-level async code outside that block."
     }
   ]
 }

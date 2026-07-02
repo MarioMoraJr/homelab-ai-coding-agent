@@ -148,7 +148,7 @@ function commandFor(action, body) {
       const prompt = String(body.prompt || '').trim();
       if (!prompt) throw new Error('Prompt is required');
       return {
-        label: `Agent (${architectModel} → ${ollamaModel})`,
+        label: `Local Agent (${architectModel} -> ${ollamaModel})`,
         type: 'local-agent',
         prompt,
         history: Array.isArray(body.history) ? body.history.slice(-8) : [],
@@ -613,6 +613,7 @@ async function runLocalAgent(job, cwd, spec) {
     const hasTestScript = Boolean(packageJson.scripts?.test);
 
     let inspectedProject = false;
+    const readPaths = new Set();
     let wroteProject = false;
     let testedAfterWrite = !hasTestScript;
     let readOnlyLoopCount = 0;
@@ -701,7 +702,18 @@ async function runLocalAgent(job, cwd, spec) {
         return;
       }
 
+      // Block writes to files that haven't been read yet in this session
+      if (WRITE_TOOLS.has(tool) && args.path && !readPaths.has(args.path)) {
+        append(job, `Write to ${args.path} blocked: read it first.\n\n`);
+        messages.push({ role: 'assistant', content: JSON.stringify(action) });
+        messages.push({ role: 'user', content: `You must read ${args.path} with read_file before writing or replacing it. Read the file now so you can make targeted edits instead of rewriting from scratch.` });
+        continue;
+      }
+
       const result = await runLocalAgentTool(cwd, tool, args);
+      if (tool === 'read_file' && args.path && !result.error) {
+        readPaths.add(args.path);
+      }
       if (INSPECTION_TOOLS.has(tool) && !result.error) {
         inspectedProject = true;
       }
@@ -793,7 +805,7 @@ async function runLocalAgent(job, cwd, spec) {
       }
     }
 
-    append(job, 'Stopped after 30 steps. The model kept looping instead of finishing. Try a narrower request or use Local Suggest for a patch proposal.\n');
+    append(job, 'Stopped after 30 steps. The model kept looping instead of finishing. Try a narrower request or review the current diff before continuing.\n');
     job.status = 'failed';
     job.exitCode = 1;
   } catch (error) {
