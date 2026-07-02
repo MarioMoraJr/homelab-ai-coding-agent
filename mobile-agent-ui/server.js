@@ -567,8 +567,12 @@ async function runArchitect(userPrompt, cwd, signal) {
   if (!response.ok) throw new Error(`Architect model returned HTTP ${response.status}`);
   const data = await response.json();
   const raw = data.message?.content || '';
-  // Strip deepseek-r1 chain-of-thought tags; keep only the final spec for the builder
-  const spec = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  // Strip chain-of-thought tags, then strip ALL fenced code blocks before passing to builder.
+  // The builder copies code verbatim including bugs — English description only is safer.
+  const spec = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/```[\s\S]*?```/g, '[code example removed — implement based on the plain-English description above]')
+    .trim();
   return { raw, spec };
 }
 
