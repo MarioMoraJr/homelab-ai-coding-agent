@@ -61,9 +61,14 @@
       "hint": "Port already in use. In tests, pass port 0 to listen so the OS picks a free port: app.listen(0, cb) and read the actual port from server.address().port."
     },
     {
+      "id": "syntax-error-in-named-file",
+      "match": "/workspace/[^/]+/([^:\\n]+):(\\d+)[\\s\\S]{0,300}SyntaxError: ([^\\n]+)",
+      "hint": "The SyntaxError '$3' is in '$1' at line $2 — NOT in server.test.js. Read '$1' immediately, find the broken syntax near line $2, then use write_file to rewrite '$1' completely with correct syntax. Do NOT touch server.test.js until '$1' parses without errors."
+    },
+    {
       "id": "syntax-error",
       "match": "SyntaxError: (.*)",
-      "hint": "Syntax error: $1. Use write_file to rewrite the entire file correctly from scratch — do NOT use replace_text, which can introduce bracket mismatches. Read the file first, fix the error mentally, then write the complete corrected file."
+      "hint": "Syntax error: $1. Read the file the error points to (check which .js file appears above 'SyntaxError' in the output), then use write_file to rewrite that file completely with correct syntax."
     },
     {
       "id": "wrong-test-framework",
