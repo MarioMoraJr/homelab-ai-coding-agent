@@ -22,6 +22,18 @@ const historyPanel = document.querySelector('#history-panel');
 const historyToggle = document.querySelector('#history-toggle');
 let pollTimer = null;
 let activeJobId = null;
+
+function toast(message, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = message;
+  document.body.append(el);
+  requestAnimationFrame(() => el.classList.add('toast-show'));
+  setTimeout(() => {
+    el.classList.remove('toast-show');
+    el.addEventListener('transitionend', () => el.remove());
+  }, 3200);
+}
 const chatHistoryByProject = new Map();
 
 function addChatMessage(role, text) {
@@ -129,9 +141,13 @@ function renderJob(job) {
   jobTitle.textContent = `${job.label} - ${job.project}`;
   jobStatus.textContent = job.status;
   busyLabel.textContent = job.status === 'running' ? `${job.label} is running...` : 'Waiting for output...';
-  output.textContent = job.output || (job.status === 'running' ? 'Waiting for output...' : 'No output.');
-  output.scrollTop = output.scrollHeight;
+  const isAgent = job.action === 'local-agent';
   renderSteps(job.output || '', job.action);
+  output.hidden = isAgent && parseSteps(job.output || '').length > 0;
+  if (!output.hidden) {
+    output.textContent = job.output || (job.status === 'running' ? 'Waiting for output...' : 'No output.');
+    output.scrollTop = output.scrollHeight;
+  }
   setBusy(job.status === 'running');
 }
 
@@ -146,28 +162,41 @@ function streamJob(id, action) {
     const msg = JSON.parse(event.data);
     if (msg.chunk) {
       accumulated += msg.chunk;
-      output.textContent = accumulated || 'Waiting for output...';
-      output.scrollTop = output.scrollHeight;
       jobStatus.textContent = 'running';
       renderSteps(accumulated, action);
+      const hasSteps = action === 'local-agent' && parseSteps(accumulated).length > 0;
+      output.hidden = hasSteps;
+      if (!hasSteps) {
+        output.textContent = accumulated || 'Waiting for output...';
+        output.scrollTop = output.scrollHeight;
+      }
     }
     if (msg.done) {
       es.close();
       activeJobId = null;
       jobStatus.textContent = msg.status;
       renderSteps(accumulated, action);
+      const hasSteps = action === 'local-agent' && parseSteps(accumulated).length > 0;
+      output.hidden = hasSteps;
+      if (!hasSteps) output.textContent = accumulated || 'No output.';
       setBusy(false);
       if (action === 'local-agent' && msg.status === 'complete') {
         addChatMessage('assistant', accumulated || 'Done.');
         rememberChat('assistant', accumulated || 'Done.');
-        // Auto-show diff after agent writes files
         try {
           const { job: diffJob } = await api('/api/jobs', {
             method: 'POST',
             body: JSON.stringify({ action: 'diff', project: projectSelect.value })
           });
           streamJob(diffJob.id, 'diff');
-        } catch (_) { /* no diff if another job raced in */ }
+        } catch (_) { /* busy */ }
+      } else if (msg.status === 'complete') {
+        const labels = { test: 'Tests passed', status: 'Status fetched', diff: 'Diff ready', commit: 'Committed', push: 'Pushed to remote' };
+        if (labels[action]) toast(labels[action]);
+      } else if (msg.status === 'failed') {
+        toast('Job failed', 'error');
+      } else if (msg.status === 'cancelled') {
+        toast('Cancelled', 'info');
       }
     }
   };
@@ -198,9 +227,10 @@ async function loadHistory() {
         historyPanel.hidden = true;
         jobTitle.textContent = `${job.label} - ${job.project}`;
         jobStatus.textContent = job.status;
-        output.textContent = job.output || 'No output.';
         renderSteps(job.output || '', job.action);
-        stepsView.hidden = !job.output;
+        const hasSteps = job.action === 'local-agent' && parseSteps(job.output || '').length > 0;
+        output.hidden = hasSteps;
+        output.textContent = hasSteps ? '' : (job.output || 'No output.');
       });
       historyPanel.append(row);
     }
@@ -253,6 +283,10 @@ async function runAction(action) {
   if (action === 'local-agent') {
     addChatMessage('user', prompt);
     rememberChat('user', prompt);
+    promptInput.value = '';
+  }
+  if (action === 'commit') {
+    commitMessage.value = '';
   }
   const { job } = await api('/api/jobs', {
     method: 'POST',
