@@ -27,8 +27,8 @@
     },
     {
       "id": "module-not-found-relative",
-      "match": "Cannot find module '((?:\\.\\.?/)[^']+)'",
-      "hint": "The require path '$1' is wrong. server.test.js and server.js are in the same directory — use require('./server') (no .js extension, no ../ prefix)."
+      "match": "Cannot find module '((?:\\.\\.?/)[^']+)'[\\s\\S]*?Require stack:[\\s\\S]*?- ([^\\n]+)",
+      "hint": "The require path '$1' does not exist. Check the file shown in the Require stack ('$2') — it has a bad require() call. Only require modules that actually exist in the project. Use require('./server') to import the Express app (no .js extension). Do NOT invent new files like './data/quotes'."
     },
     {
       "id": "module-not-found-npm",

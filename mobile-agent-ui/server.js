@@ -540,7 +540,12 @@ async function runArchitect(userPrompt, cwd, signal) {
     '3. EDGE CASES: what to return for invalid input, empty state, out-of-range values',
     '4. TESTS TO ADD: exact test cases with concrete seed data, expected response shapes, and status codes',
     '',
-    'Be specific. No placeholders. No "for example". Do not write code — describe precisely what the code must do.',
+    'CRITICAL RULES:',
+    '- NO CODE. Not even one line. No backtick blocks. No pseudo-code. Plain English descriptions only.',
+    '- The builder will copy any code you write verbatim, including bugs. Describe logic in words.',
+    '- Do not invent new files or modules that do not already exist in the project.',
+    '- Base your spec only on the files shown in the project context below.',
+    '- Be specific about exact values (route paths, field names, status codes, variable names).',
   ].join('\n');
 
   const response = await fetch(`${ollamaHost.replace(/\/$/, '')}/api/chat`, {
