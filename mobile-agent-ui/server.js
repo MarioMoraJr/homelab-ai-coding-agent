@@ -296,7 +296,8 @@ function startJob({ project, cwd, action, spec }) {
     output: '',
     startedAt: new Date().toISOString(),
     finishedAt: null,
-    exitCode: null
+    exitCode: null,
+    cancel: null
   };
   jobs.set(id, job);
   activeJobId = id;
@@ -304,14 +305,18 @@ function startJob({ project, cwd, action, spec }) {
   trustProjectPath(cwd).catch(() => {});
 
   if (spec.type === 'local-suggest') {
-    runLocalSuggest(job, cwd, spec).finally(() => {
+    const controller = new AbortController();
+    job.cancel = () => controller.abort();
+    runLocalSuggest(job, cwd, { ...spec, signal: controller.signal }).finally(() => {
       activeJobId = null;
     });
     return job;
   }
 
   if (spec.type === 'local-agent') {
-    runLocalAgent(job, cwd, spec).finally(() => {
+    const controller = new AbortController();
+    job.cancel = () => controller.abort();
+    runLocalAgent(job, cwd, { ...spec, signal: controller.signal }).finally(() => {
       activeJobId = null;
     });
     return job;
@@ -356,6 +361,12 @@ function startJob({ project, cwd, action, spec }) {
     child.kill('SIGTERM');
   }, spec.timeoutMs || 2 * 60 * 1000);
 
+  job.cancel = () => {
+    clearTimeout(timer);
+    append(job, '\nCancelled by user.\n');
+    child.kill('SIGTERM');
+  };
+
   child.stdout.on('data', (chunk) => append(job, chunk));
   child.stderr.on('data', (chunk) => append(job, chunk));
   child.on('error', (error) => {
@@ -373,8 +384,9 @@ function startJob({ project, cwd, action, spec }) {
 }
 
 async function runLocalSuggest(job, cwd, spec) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), spec.timeoutMs || 5 * 60 * 1000);
+  const controller = spec.signal ? { signal: spec.signal, abort: () => {} } : new AbortController();
+  const signal = spec.signal || controller.signal;
+  const timer = setTimeout(() => controller.abort?.(), spec.timeoutMs || 5 * 60 * 1000);
 
   try {
     await trustProjectPath(cwd);
@@ -406,7 +418,7 @@ async function runLocalSuggest(job, cwd, spec) {
           temperature: 0.2
         }
       }),
-      signal: controller.signal
+      signal
     });
 
     if (!response.ok) {
@@ -522,8 +534,9 @@ const READ_ONLY_TOOLS = new Set(['plan', 'list_files', 'read_file']);
 const CHANGE_REQUEST_PATTERN = /\b(add|build|create|change|update|edit|implement|fix|write|generate)\b/i;
 
 async function runLocalAgent(job, cwd, spec) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), spec.timeoutMs || 15 * 60 * 1000);
+  const controller = spec.signal ? { signal: spec.signal, abort: () => {} } : new AbortController();
+  const signal = spec.signal || controller.signal;
+  const timer = setTimeout(() => controller.abort?.(), spec.timeoutMs || 15 * 60 * 1000);
   const messages = [
     { role: 'system', content: localAgentSystemPrompt(cwd) },
     ...sanitizeChatHistory(spec.history),
@@ -554,7 +567,7 @@ async function runLocalAgent(job, cwd, spec) {
 
     for (let step = 1; step <= 30; step += 1) {
       append(job, `Step ${step}/30\n`);
-      const raw = await ollamaJsonChat(messages, controller.signal);
+      const raw = await ollamaJsonChat(messages, signal);
       const parsed = parseJsonAction(raw);
       const action = normalizeJsonAction(parsed);
       const tool = action.tool;
@@ -1325,11 +1338,26 @@ app.post('/api/jobs', requireAuth, async (req, res) => {
 app.get('/api/jobs/:id', requireAuth, (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found' });
-  res.json({ job });
+  const { cancel: _cancel, ...jobData } = job;
+  res.json({ job: jobData });
+});
+
+app.delete('/api/jobs/:id', requireAuth, (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (job.status !== 'running') return res.status(400).json({ error: 'Job is not running' });
+  if (job.cancel) job.cancel();
+  job.status = 'cancelled';
+  job.exitCode = -1;
+  job.finishedAt = new Date().toISOString();
+  activeJobId = null;
+  const { cancel: _cancel, ...jobData } = job;
+  res.json({ job: jobData });
 });
 
 app.get('/api/jobs', requireAuth, (_req, res) => {
-  res.json({ jobs: Array.from(jobs.values()).slice(-20).reverse() });
+  const list = Array.from(jobs.values()).slice(-20).reverse().map(({ cancel: _c, ...j }) => j);
+  res.json({ jobs: list });
 });
 
 export { app };

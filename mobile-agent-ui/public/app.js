@@ -16,7 +16,9 @@ const commitMessage = document.querySelector('#commit-message');
 const logoutButton = document.querySelector('#logout');
 const busyOverlay = document.querySelector('#busy-overlay');
 const busyLabel = document.querySelector('#busy-label');
+const cancelButton = document.querySelector('#cancel-job');
 let pollTimer = null;
+let activeJobId = null;
 const chatHistoryByProject = new Map();
 
 function addChatMessage(role, text) {
@@ -98,6 +100,7 @@ function renderJob(job) {
 }
 
 async function pollJob(id) {
+  activeJobId = id;
   clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     try {
@@ -105,8 +108,9 @@ async function pollJob(id) {
       renderJob(job);
       if (job.status !== 'running') {
         clearInterval(pollTimer);
+        activeJobId = null;
         setBusy(false);
-        if (job.action === 'local-agent') {
+        if (job.action === 'local-agent' && job.status === 'complete') {
           const text = job.output || 'Done.';
           addChatMessage('assistant', text);
           rememberChat('assistant', text);
@@ -114,12 +118,29 @@ async function pollJob(id) {
       }
     } catch (error) {
       clearInterval(pollTimer);
+      activeJobId = null;
       jobStatus.textContent = 'error';
       output.textContent += `\n${error.message}`;
       setBusy(false);
     }
   }, 1200);
 }
+
+cancelButton.addEventListener('click', async () => {
+  if (!activeJobId) return;
+  try {
+    cancelButton.disabled = true;
+    const { job } = await api(`/api/jobs/${activeJobId}`, { method: 'DELETE' });
+    clearInterval(pollTimer);
+    activeJobId = null;
+    renderJob(job);
+    setBusy(false);
+  } catch (error) {
+    jobStatus.textContent = 'error';
+    output.textContent += `\nCancel failed: ${error.message}`;
+    cancelButton.disabled = false;
+  }
+});
 
 async function runAction(action) {
   const prompt = promptInput.value.trim();

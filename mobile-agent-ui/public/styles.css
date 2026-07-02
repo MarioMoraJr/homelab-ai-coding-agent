@@ -174,9 +174,16 @@ button.danger:active {
   font-size: 15px;
 }
 
-.busy-box span:last-child {
+.busy-box span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.cancel-btn {
+  margin-top: 4px;
+  width: 100%;
+  font-size: 13px;
+  padding: 6px 12px;
 }
 
 .spinner {
