@@ -88,8 +88,9 @@ async function loadProjects() {
 
 function setBusy(busy) {
   document.querySelectorAll('button, input, select, textarea').forEach((element) => {
-    if (element.id !== 'logout') element.disabled = busy;
+    if (element.id !== 'logout' && element.id !== 'cancel-job') element.disabled = busy;
   });
+  cancelButton.disabled = !busy;
   busyOverlay.hidden = !busy;
 }
 
@@ -141,7 +142,7 @@ function streamJob(id, action) {
   let accumulated = '';
   const es = new EventSource(`/api/jobs/${id}/stream`);
 
-  es.onmessage = (event) => {
+  es.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
     if (msg.chunk) {
       accumulated += msg.chunk;
